@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- saved from url=(0050)file:///D:/docs/download/mpwt_pavement_tool_2.html -->
+<!-- saved from url=(0050)file:///D:/docs/download/mpwt_pavement_tool_3.html -->
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -67,6 +67,9 @@
   .layer.GS1{background:#e3c9c9;}
   .layer.GS2{background:#efdede;}
   .layer.GC{background:#e9dfae;}
+  .layer.BASE84{background:#c9c9c9;}
+  .layer.SUBBASE84{background:#e3c9c9;}
+  .layer.IMPROVE84{background:#cdbfa0;}
   .layer.SUBGRADE{background:#a9805a;color:#fff;font-style:italic;}
   .note{font-size:.82rem;color:var(--muted);margin-top:10px;}
   .warn-box{background:var(--warn-bg);border:1px solid #edd0a0;color:#6b4c0c;border-radius:8px;padding:10px 14px;font-size:.84rem;margin-top:12px;}
@@ -101,13 +104,17 @@
 
 <div class="container">
   <div class="source-note">
-    <b>Scope of this tool.</b> Implements Section 7 (Design Traffic / ESA calculation), the Section 11.8.3 pavement
-    catalogue for granular pavements with thin bituminous surfacing (design traffic ≤ 3×10<sup>6</sup> ESA — covers
-    the great majority of provincial, collector and local-access roads), and the Section 9 minimum-requirement tables
-    for rigid (concrete) pavements. It does <b>not</b> implement the full mechanistic-empirical procedure of
-    Section 8 / 9.4 (layered elastic analysis, fatigue and erosion nomographs) — that requires specialist software
-    and a qualified pavement engineer. Every figure below is transcribed from the source PDF and cited by clause;
-    verify against the original document for final design submissions.
+    <b>Scope of this tool.</b> Implements Section 7 (Design Traffic / ESA calculation); the Section 11.8.3 pavement
+    catalogue for lightly-trafficked granular pavements with thin bituminous surfacing (design traffic ≤ 3×10<sup>6</sup> ESA);
+    the Section 8.3.1 empirical design chart (Figure 8.4) for granular pavements with thin bituminous surfacing, covering
+    the wider 10<sup>5</sup>–10<sup>8</sup> ESA range — per §8.2.7 this chart gives a total granular thickness equivalent to
+    the full mechanistic-empirical procedure (using a top granular modulus of 350 MPa), so it is used here as the practical,
+    closed-form stand-in for that procedure; and the Section 9 minimum-requirement tables for rigid (concrete) pavements.
+    It does <b>not</b> implement the full layered-elastic mechanistic-empirical analysis of Section 8.2 itself (critical
+    strain / fatigue life calculation for asphalt, cemented or lean-mix concrete bases) or the fatigue/erosion nomograph
+    procedure of Section 9.4 for heavily-trafficked rigid pavements — those require specialist layered-elastic software
+    (e.g. CIRCLY) and a qualified pavement engineer. Every figure below is transcribed from the source PDF and cited by
+    clause; verify against the original document for final design submissions.
   </div>
 
   <nav class="tabs">
@@ -282,6 +289,83 @@
         <button class="btn" onclick="compareFlexible()">Check compliance</button>
       </div>
       <div id="fxCompareResult"></div>
+    </div>
+
+    <hr style="border:none;border-top:1px solid var(--line);margin:26px 0;">
+
+    <div class="card">
+      <h2>General Method — Empirical Design Chart (Figure 8.4)</h2>
+      <div class="clause">D3 102-2024 §8.3.1 — for design traffic <b>10⁵ – 10⁸ ESA</b> (use this for traffic beyond the 3×10⁶ ESA
+        catalogue limit above, or whenever the general method is preferred). §8.2.7 notes the full mechanistic-empirical
+        procedure yields a similar total granular thickness to this chart, using a top granular vertical modulus of 350 MPa —
+        this chart is therefore the practical, closed-form equivalent of the mechanistic-empirical procedure for this class
+        of pavement.</div>
+      <div class="grid">
+        <div class="field">
+          <label>Subgrade design CBR (%) <span class="hint">4-day soaked value, §5</span></label>
+          <input type="number" id="f84Cbr" value="5" min="0.5" step="0.1">
+        </div>
+        <div class="field">
+          <label>Design Traffic, DESA (ESA) <span class="hint">valid range 10⁵ – 10⁸ ESA</span></label>
+          <input type="number" id="f84Desa" value="5000000" min="0" step="10000">
+        </div>
+      </div>
+      <div class="row-actions">
+        <button class="btn secondary" onclick="pullDesaFromTraffic()">Pull DESA from Tab 1</button>
+      </div>
+
+      <div class="field" style="margin-top:16px;">
+        <label style="display:flex;align-items:center;gap:8px;font-weight:600;">
+          <input type="checkbox" id="f84UseImprove" onchange="toggleImproveLayer()" style="width:auto;">
+          Include a selected-subgrade / lime-stabilised improvement (capping) layer — §8.3.2, Equation 8.16
+        </label>
+      </div>
+      <div class="grid" id="f84ImproveFields" style="display:none;">
+        <div class="field">
+          <label>Trial thickness of improvement layer (mm)</label>
+          <input type="number" id="f84ImproveThk" value="300" min="0" step="10">
+        </div>
+        <div class="field">
+          <label>Presumptive / tested CBR of improvement material (%)</label>
+          <input type="number" id="f84ImproveCbr" value="15" min="0" step="0.5">
+        </div>
+      </div>
+
+      <div class="row-actions">
+        <button class="btn" onclick="computeFig84()">Calculate required structure (Fig. 8.4)</button>
+      </div>
+    </div>
+
+    <div class="card" id="f84ResultCard" style="display:none;">
+      <h2>Required Pavement Structure — Figure 8.4</h2>
+      <div class="two-col">
+        <div>
+          <div id="f84SubgradeInfo"></div>
+          <div id="f84Stack"></div>
+          <div class="legend" id="f84Legend"></div>
+        </div>
+        <div>
+          <table id="f84LayerTable">
+            <thead><tr><th>Layer</th><th>Requirement</th><th>Thickness</th><th>Basis</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <div id="f84TotalNote" class="note"></div>
+        </div>
+      </div>
+      <div id="f84RangeWarn"></div>
+    </div>
+
+    <div class="card" id="f84CompareCard" style="display:none;">
+      <h2>Compare Against a Submitted / Proposed Design (Fig. 8.4 method)</h2>
+      <div class="clause">Enter the proposed layers (top to bottom) to check compliance. Leave a row blank if not used.</div>
+      <table>
+        <thead><tr><th>Layer</th><th>Proposed design CBR (%)</th><th>Proposed thickness (mm)</th></tr></thead>
+        <tbody id="f84ProposedRows"></tbody>
+      </table>
+      <div class="row-actions">
+        <button class="btn" onclick="compareFig84()">Check compliance</button>
+      </div>
+      <div id="f84CompareResult"></div>
     </div>
   </section>
 
@@ -510,7 +594,14 @@ const DOWEL_TABLE = [
 /* ============================================================
    SHARED STATE
    ============================================================ */
-const STATE = { traffic: null, flexible: null, rigid: null };
+const STATE = { traffic: null, flexible: null, rigid: null, flexible84: null };
+
+// Figure 8.4 layer material descriptions (§8.3.2)
+const FIG84_MATERIALS = {
+  BASE84:    { name: 'Granular base', spec: 'Design CBR ≥ 80% — a minimum thickness applies whenever the material directly below has design CBR ≥ 30% (§8.3.2).' },
+  SUBBASE84: { name: 'Granular subbase', spec: 'Design CBR ≥ 30%, up to the natural subgrade (or improvement layer) CBR. Table 11.3 materials (G60/GS1/GS2) may be used to suit the required grade.' },
+  IMPROVE84: { name: 'Selected subgrade / lime-stabilised subgrade', spec: 'Design CBR = min(15%, presumptive/tested CBR, support from underlying layer per Equation 8.16).' },
+};
 
 /* ============================================================
    TAB NAVIGATION
@@ -608,7 +699,7 @@ function computeTraffic(){
 
   const warnEl = document.getElementById('trafficWarn');
   if (!tcat){
-    warnEl.innerHTML = '<div class="err-box">Design traffic exceeds 3.0 million ESA — beyond the range of the Section 11.8.3 pavement catalogue. Use the mechanistic-empirical procedure (Section 8) or empirical design chart (Figure 8.4) instead.</div>';
+    warnEl.innerHTML = '<div class="err-box">Design traffic exceeds 3.0 million ESA — beyond the range of the Section 11.8.3 pavement catalogue. Use the "General Method — Empirical Design Chart (Figure 8.4)" section further down Tab 2 instead (valid 10⁵–10⁸ ESA) — click "Pull DESA from Tab 1" there once you switch tabs.</div>';
   } else {
     warnEl.innerHTML = '';
   }
@@ -729,6 +820,174 @@ function compareFlexible(){
 }
 
 /* ============================================================
+   TAB 2b — GENERAL EMPIRICAL DESIGN CHART (FIGURE 8.4, §8.3.1)
+   t = [219 - 211*log10(CBR) + 58*log10(CBR)^2] * log10(DESA/120)   (mm)
+   Valid for design traffic 10^5 - 10^8 ESA. Printed directly on Figure 8.4.
+   §8.2.7 notes the mechanistic-empirical procedure yields a similar total
+   granular thickness to this chart using a top granular modulus of 350 MPa.
+   ============================================================ */
+function pullDesaFromTraffic(){
+  if (!STATE.traffic){ alert('Calculate design traffic in Tab 1 first.'); return; }
+  document.getElementById('f84Desa').value = Math.round(STATE.traffic.DESA);
+  alert('Pulled DESA = '+fmt(STATE.traffic.DESA,0)+' ESA from Tab 1.');
+}
+
+function toggleImproveLayer(){
+  document.getElementById('f84ImproveFields').style.display =
+    document.getElementById('f84UseImprove').checked ? 'grid' : 'none';
+}
+
+// Core Figure 8.4 equation: thickness of cover (mm) required over a material of given design CBR
+function fig84Cover(cbr, desa){
+  if (cbr<=0 || desa<=0) return 0;
+  const logCBR = Math.log10(cbr);
+  const t = (219 - 211*logCBR + 58*logCBR*logCBR) * Math.log10(desa/120);
+  return Math.max(0, t);
+}
+
+function computeFig84(){
+  const cbrNat = parseFloat(document.getElementById('f84Cbr').value)||0;
+  const desa = parseFloat(document.getElementById('f84Desa').value)||0;
+  const useImprove = document.getElementById('f84UseImprove').checked;
+  const improveThk = useImprove ? (parseFloat(document.getElementById('f84ImproveThk').value)||0) : 0;
+  const improveCbrInput = useImprove ? (parseFloat(document.getElementById('f84ImproveCbr').value)||0) : 0;
+
+  const warnings = [];
+  if (desa < 1e5) warnings.push('Design traffic is below 10⁵ ESA — Figure 8.4 is not calibrated below this. Use the Section 11.8.3 catalogue (Tab 2 above) for lightly-trafficked roads instead.');
+  if (desa > 1e8) warnings.push('Design traffic exceeds 10⁸ ESA — beyond the range of Figure 8.4. A full mechanistic-empirical design (§8.2, layered-elastic software) by a pavement engineer is required.');
+  if (cbrNat < 2) warnings.push('Subgrade CBR is below 2% — Figure 8.4 is not plotted below CBR 2%. A selected-subgrade or lime-stabilised improvement layer (ticked above) will normally be required for such a weak subgrade — consider a deeper capping design and specialist input.');
+
+  // total granular cover required directly over the natural (or improved) subgrade
+  const totalOverNatural = fig84Cover(cbrNat, desa);
+  const minBase = fig84Cover(30, desa); // minimum base (CBR>=80%) thickness once resting on material with CBR >= 30%
+
+  let improveLayer = null;
+  let layerBaseCbr = cbrNat; // CBR of the material the granular base/subbase system is built on
+  if (useImprove && improveThk > 0){
+    const supportCBR = cbrNat * Math.pow(2, improveThk/150); // Equation 8.16
+    const designCBR = Math.min(15, improveCbrInput>0?improveCbrInput:15, supportCBR);
+    improveLayer = { thickness: improveThk, presumptive: improveCbrInput, supportCBR, designCBR };
+    layerBaseCbr = designCBR;
+  }
+
+  let granular = []; // top-down: Base, [Subbase]
+  if (layerBaseCbr >= 30){
+    granular.push({ key:'BASE84', label:'Base', cbrNote:'CBR ≥ 80%', t: Math.round(minBase) });
+  } else {
+    const totalOverThisLayer = fig84Cover(layerBaseCbr, desa);
+    const subbase = Math.max(0, totalOverThisLayer - minBase);
+    granular.push({ key:'BASE84', label:'Base', cbrNote:'CBR ≥ 80%', t: Math.round(minBase) });
+    if (subbase > 0) granular.push({ key:'SUBBASE84', label:'Subbase', cbrNote:'CBR ≥ 30% (built up on CBR '+fmt(layerBaseCbr,1)+'% support)', t: Math.round(subbase) });
+  }
+
+  const granularTotal = granular.reduce((s,l)=>s+l.t,0);
+  const totalProvided = (improveLayer?improveLayer.thickness:0) + granularTotal;
+  const deficiency = totalOverNatural - totalProvided;
+
+  STATE.flexible84 = { cbrNat, desa, improveLayer, granular, totalOverNatural, minBase, totalProvided, deficiency };
+
+  document.getElementById('f84SubgradeInfo').innerHTML =
+    `<div class="stat-grid">
+       <div class="stat"><div class="lbl">Subgrade CBR</div><div class="val">${fmt(cbrNat,1)}%</div></div>
+       <div class="stat"><div class="lbl">Design traffic (DESA)</div><div class="val">${fmt(desa,0)} ESA</div></div>
+       <div class="stat"><div class="lbl">Total cover required over subgrade</div><div class="val">${fmt(totalOverNatural,0)} mm</div></div>
+     </div>`;
+
+  const stackParts = ['<div class="layer-stack">',
+    `<div class="layer DBS1"><span>DBS1 — Double/double sprayed seal</span><span>20 mm</span></div>`];
+  granular.forEach(l => stackParts.push(`<div class="layer ${l.key}"><span>${l.label} — ${l.cbrNote}</span><span>${l.t} mm</span></div>`));
+  if (improveLayer) stackParts.push(`<div class="layer IMPROVE84"><span>Improvement layer — design CBR ${fmt(improveLayer.designCBR,1)}%</span><span>${improveLayer.thickness} mm</span></div>`);
+  stackParts.push(`<div class="layer SUBGRADE"><span>Subgrade (CBR ${fmt(cbrNat,1)}%)</span><span>—</span></div></div>`);
+  document.getElementById('f84Stack').innerHTML = stackParts.join('');
+
+  const legendKeys = ['BASE84','SUBBASE84'].concat(improveLayer?['IMPROVE84']:[]);
+  document.getElementById('f84Legend').innerHTML = legendKeys.map(k=>
+    `<span><span class="swatch layer ${k}" style="width:14px;height:14px;padding:0;"></span>${FIG84_MATERIALS[k].name}</span>`).join('');
+
+  const tbody = document.querySelector('#f84LayerTable tbody');
+  let tRows = `<tr><td>Surfacing</td><td>DBS1 — non-structural sprayed seal</td><td><b>20 mm</b></td><td>§11.8.3 — makes no contribution to structural cover</td></tr>`;
+  granular.forEach(l => {
+    tRows += `<tr><td>${l.label}</td><td>${l.cbrNote}</td><td><b>${l.t} mm</b></td><td style="font-size:.78rem;">${FIG84_MATERIALS[l.key].spec}</td></tr>`;
+  });
+  if (improveLayer){
+    tRows += `<tr><td>Improvement layer</td><td>Design CBR ${fmt(improveLayer.designCBR,1)}% (min of 15%, presumptive ${fmt(improveLayer.presumptive,1)}%, support ${fmt(improveLayer.supportCBR,1)}%)</td>
+      <td><b>${improveLayer.thickness} mm</b></td><td style="font-size:.78rem;">${FIG84_MATERIALS.IMPROVE84.spec} Support CBR via Eq. 8.16: CBR_underlying × 2^(t/150).</td></tr>`;
+  }
+  tbody.innerHTML = tRows;
+
+  document.getElementById('f84TotalNote').innerHTML =
+    `Total structural (granular + improvement) thickness provided: <b>${totalProvided} mm</b> vs. total cover required
+    over the natural subgrade: <b>${fmt(totalOverNatural,0)} mm</b> (§8.3.1, Fig. 8.4). Minimum base (CBR ≥ 80%) thickness
+    once resting on CBR ≥ 30% material: <b>${fmt(minBase,0)} mm</b>.` +
+    (improveLayer ? (deficiency > 0.5
+      ? ` <b style="color:var(--bad);">Deficient by ${fmt(deficiency,0)} mm</b> — per §8.3.2 steps 4–8, increase the
+         improvement layer thickness (or its CBR) and recalculate.`
+      : ` Cover requirement satisfied (§8.3.2, iterative check step 4).`)
+      : '');
+
+  const rangeWarn = document.getElementById('f84RangeWarn');
+  rangeWarn.innerHTML = warnings.length
+    ? warnings.map(w=>`<div class="warn-box">${w}</div>`).join('')
+    : '<div class="note">Applicable range: design traffic 10⁵–10⁸ ESA (§8.3.1). Table 11.3 governs the actual material specifications for base/subbase; this chart governs required thicknesses only.</div>';
+
+  document.getElementById('f84ResultCard').style.display = 'block';
+
+  // build proposed-design comparison rows
+  const propBody = document.getElementById('f84ProposedRows');
+  const layerNames = ['Surfacing','Base','Subbase','Improvement layer (if used)'];
+  propBody.innerHTML = layerNames.map((n,i)=>
+    `<tr><td>${n}</td>
+      <td><input type="number" id="f84PropCbr${i}" min="0" step="0.5" placeholder="CBR %"></td>
+      <td><input type="number" id="f84PropThk${i}" min="0" placeholder="mm"></td></tr>`).join('');
+  document.getElementById('f84CompareCard').style.display = 'block';
+}
+
+function compareFig84(){
+  if (!STATE.flexible84){ alert('Get the required structure first.'); return; }
+  const s = STATE.flexible84;
+  const layerNames = ['Surfacing','Base','Subbase','Improvement layer (if used)'];
+  const proposed = [];
+  for (let i=0;i<layerNames.length;i++){
+    const cbr = parseFloat(document.getElementById('f84PropCbr'+i).value);
+    const thk = parseFloat(document.getElementById('f84PropThk'+i).value);
+    if (thk) proposed.push({label:layerNames[i], cbr: cbr||0, t: thk});
+  }
+  const propStructural = proposed.filter(l=>l.label!=='Surfacing').reduce((s,l)=>s+(l.t||0),0);
+  const reqStructural = s.totalProvided;
+
+  let rows = `<tr><td>Total structural thickness (base + subbase + improvement layer)</td>
+    <td>≥ ${fmt(reqStructural,0)} mm (per §8.3.1/8.3.2 build-up above)</td><td>${propStructural} mm</td>
+    <td><span class="badge-status ${propStructural>=reqStructural?'ok':'bad'}">${propStructural>=reqStructural?'PASS':'FAIL'}</span></td></tr>`;
+
+  const propBase = proposed.find(l=>l.label==='Base');
+  if (propBase){
+    const status = (propBase.t>=s.minBase) ? 'ok':'bad';
+    rows += `<tr><td>Base thickness</td><td>≥ ${fmt(s.minBase,0)} mm, design CBR ≥ 80%</td>
+      <td>${propBase.t} mm, CBR ${propBase.cbr||'—'}%</td>
+      <td><span class="badge-status ${status}">${status==='ok'?'PASS':'FAIL'}</span></td></tr>`;
+    if (propBase.cbr && propBase.cbr < 80){
+      rows += `<tr><td>Base material CBR</td><td>≥ 80% (§8.3.2)</td><td>${propBase.cbr}%</td>
+        <td><span class="badge-status bad">FAIL</span></td></tr>`;
+    }
+  } else {
+    rows += `<tr><td>Base thickness</td><td>≥ ${fmt(s.minBase,0)} mm, design CBR ≥ 80%</td><td>not provided</td>
+      <td><span class="badge-status bad">FAIL</span></td></tr>`;
+  }
+
+  const totalOverCheck = proposed.filter(l=>l.label!=='Surfacing').reduce((sum,l)=>sum+(l.t||0),0);
+  rows += `<tr><td>Total cover over natural subgrade (Fig. 8.4)</td><td>≥ ${fmt(s.totalOverNatural,0)} mm</td>
+    <td>${totalOverCheck} mm</td>
+    <td><span class="badge-status ${totalOverCheck>=s.totalOverNatural?'ok':'bad'}">${totalOverCheck>=s.totalOverNatural?'PASS':'FAIL'}</span></td></tr>`;
+
+  document.getElementById('f84CompareResult').innerHTML = `<table>
+    <thead><tr><th>Check</th><th>MPWT requirement</th><th>Proposed</th><th>Status</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+
+  STATE.flexible84.proposed = proposed;
+  STATE.flexible84.compareRows = rows;
+}
+
+/* ============================================================
    TAB 3 — RIGID PAVEMENT
    ============================================================ */
 function pullHvagFromTraffic(){
@@ -821,6 +1080,13 @@ function buildReport(){
       sub: STATE.flexible.proposed ? STATE.flexible.proposed.filter(l=>l.m!=='DBS1').reduce((s,l)=>s+l.t,0)+' mm (proposed)' : '(no proposed design entered)',
       status: STATE.flexible.proposed ? ((STATE.flexible.proposed.filter(l=>l.m!=='DBS1').reduce((s,l)=>s+l.t,0)>=reqStructural)?'PASS':'FAIL') : 'MISSING'});
   }
+  if (STATE.flexible84){
+    const f = STATE.flexible84;
+    findings.push({p:'Flexible pavement (general method) — design traffic', req:'10⁵–10⁸ ESA range (§8.3.1, Fig. 8.4)', sub:fmt(f.desa,0)+' ESA', status:'INFO'});
+    findings.push({p:'Flexible pavement (general method) — required structural thickness', req:'≥ '+fmt(f.totalProvided,0)+' mm (Fig. 8.4, §8.3.1–8.3.2)',
+      sub: f.proposed ? f.proposed.filter(l=>l.label!=='Surfacing').reduce((s,l)=>s+(l.t||0),0)+' mm (proposed)' : '(no proposed design entered)',
+      status: f.proposed ? ((f.proposed.filter(l=>l.label!=='Surfacing').reduce((s,l)=>s+(l.t||0),0)>=f.totalProvided)?'PASS':'FAIL') : 'MISSING'});
+  }
   if (STATE.rigid){
     findings.push({p:'Rigid pavement — base thickness ('+BASE_TYPE_LABEL[STATE.rigid.type]+')', req:'≥ '+STATE.rigid.reqBase+' mm (Table 9.7, '+STATE.rigid.tierLabel+')',
       sub: STATE.rigid.base+' mm', status: STATE.rigid.base>=STATE.rigid.reqBase?'PASS':'FAIL'});
@@ -859,10 +1125,12 @@ function buildReport(){
     <h3>Observations &amp; Recommendations</h3>
     <ul style="font-size:.88rem;">
       <li>This tool covers Section 7 design-traffic calculation, the Section 11.8.3 lightly-trafficked catalogue
-        (≤ 3×10⁶ ESA), and Section 9 minimum-requirement checks for rigid pavements. For design traffic beyond
-        3×10⁶ ESA on flexible pavements, or full base-thickness design of heavily-trafficked rigid pavements
-        (fatigue/erosion analysis per §9.4), engage a pavement engineer using the mechanistic-empirical procedure
-        of Section 8 / 9.4.</li>
+        (≤ 3×10⁶ ESA), the Section 8.3.1 empirical design chart / Figure 8.4 general method (10⁵–10⁸ ESA — the
+        practical equivalent of the mechanistic-empirical procedure per §8.2.7), and Section 9 minimum-requirement
+        checks for rigid pavements. For traffic beyond 10⁸ ESA, for fatigue-life assessment of asphalt/cemented/lean-mix
+        bases (§8.2.1–8.2.7 layered-elastic analysis), or full base-thickness design of heavily-trafficked rigid
+        pavements (fatigue/erosion nomograph analysis per §9.4), engage a pavement engineer using specialist
+        layered-elastic design software.</li>
       <li>Confirm subgrade CBR by 4-day soaked laboratory testing or approved field method per Section 5 before
         finalising any structure shown here.</li>
       <li>All figures are transcribed from D3 102-2024; verify against the source PDF for any submission to MPWT /
