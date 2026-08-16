@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- saved from url=(0050)file:///D:/docs/download/mpwt_pavement_tool_3.html -->
+<!-- saved from url=(0050)file:///D:/docs/download/mpwt_pavement_tool_4.html -->
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -110,18 +110,22 @@
     the wider 10<sup>5</sup>–10<sup>8</sup> ESA range — per §8.2.7 this chart gives a total granular thickness equivalent to
     the full mechanistic-empirical procedure (using a top granular modulus of 350 MPa), so it is used here as the practical,
     closed-form stand-in for that procedure; and the Section 9 minimum-requirement tables for rigid (concrete) pavements.
-    It does <b>not</b> implement the full layered-elastic mechanistic-empirical analysis of Section 8.2 itself (critical
-    strain / fatigue life calculation for asphalt, cemented or lean-mix concrete bases) or the fatigue/erosion nomograph
-    procedure of Section 9.4 for heavily-trafficked rigid pavements — those require specialist layered-elastic software
-    (e.g. CIRCLY) and a qualified pavement engineer. Every figure below is transcribed from the source PDF and cited by
-    clause; verify against the original document for final design submissions.
+    It does not implement the fatigue/erosion nomograph procedure of Section 9.4 for heavily-trafficked rigid pavements
+    — that requires specialist software and a qualified pavement engineer. Every figure in Tabs 1–3 and 5 is transcribed
+    from the source PDF and cited by clause; verify against the original document for final design submissions.
+    <b>Tab 4 (Mechanistic-Empirical)</b> is a separate, experimental addition: since §8.2 itself delegates the
+    layered-elastic strain calculation to external software (AustPADS/CIRCLY) rather than providing the method, Tab 4
+    is an independently-built implementation of that general theory — <b>not part of the official MPWT specification,
+    unvalidated against MPWT-recognised software, and not to be used for a submission without an engineer's independent
+    check.</b> See the warning banner on that tab for details.
   </div>
 
   <nav class="tabs">
     <button class="tab-btn active" data-tab="traffic">1. Design Traffic (ESA)</button>
     <button class="tab-btn" data-tab="flexible">2. Flexible Pavement</button>
     <button class="tab-btn" data-tab="rigid">3. Rigid Pavement</button>
-    <button class="tab-btn" data-tab="report">4. Compliance Report</button>
+    <button class="tab-btn" data-tab="me">4. Mechanistic-Empirical (Experimental)</button>
+    <button class="tab-btn" data-tab="report">5. Compliance Report</button>
   </nav>
 
   <!-- ================= TAB 1: DESIGN TRAFFIC ================= -->
@@ -435,11 +439,139 @@
     </div>
   </section>
 
-  <!-- ================= TAB 4: REPORT ================= -->
+  <!-- ================= TAB 4: MECHANISTIC-EMPIRICAL (EXPERIMENTAL) ================= -->
+  <section id="tab-me" class="panel">
+    <div class="card" style="border:2px solid var(--bad);background:var(--bad-bg);">
+      <h2 style="color:var(--bad);margin-bottom:8px;">⚠️ Experimental — Unvalidated Against Reference Software</h2>
+      <p style="font-size:.88rem;color:#7a2323;margin:0 0 8px;">
+        D3 102-2024 §8.2 <b>does not itself provide</b> the layered-elastic strain-calculation method — it explicitly
+        requires "computer programs such as AustPADS" (§8.2, list of significant features) capable of modelling a
+        multi-layer elastic pavement. This tab is an independent implementation of that general layered-elastic
+        (Burmister-type, n-layer axisymmetric elastic) theory, derived and coded from first-principles continuum
+        mechanics — <b>it is not part of the official MPWT specification and MPWT has not reviewed or endorsed it.</b>
+      </p>
+      <p style="font-size:.88rem;color:#7a2323;margin:0 0 8px;">
+        <b>What has been checked:</b> the solver's stresses/strains match the closed-form Boussinesq single-layer
+        solution to machine precision, and match a published 3-layer benchmark (Jones 1962 / cross-checked by Wang,
+        Roesler &amp; Guo 2011) to 4–5 significant figures. <b>What has NOT been checked:</b> there is no access to
+        AustPADS, CIRCLY, or any MPWT-approved software in this environment to cross-validate real project inputs.
+      </p>
+      <p style="font-size:.88rem;color:#7a2323;margin:0 0 8px;">
+        <b>Scope limitation:</b> this module evaluates the critical strain <i>directly beneath the centre of a single
+        circular wheel load only</i> (on-axis). It does <b>not</b> implement multi-wheel (dual-tyre) superposition or
+        the "between tyres" check shown in Figure 8.2 / Table 8.2 of the Specification — for many pavements the
+        single-wheel, under-load case shown here is not the only location that needs checking.
+      </p>
+      <p style="font-size:.88rem;color:#7a2323;margin:0;font-weight:700;">
+        Do not use these results for an MPWT submission or construction decision without independent verification by
+        a qualified pavement engineer using MPWT-recognised software (e.g. AustPADS/CIRCLY).
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>Pavement Layers</h2>
+      <div class="clause">D3 102-2024 §8.2, Figure 8.2 — enter layers top to bottom. The last row is always the
+        semi-infinite subgrade. All layers are assumed fully bonded (continuous stress and displacement at each
+        interface), the standard Burmister assumption.</div>
+      <table id="meLayerTable">
+        <thead><tr><th style="width:16%">Layer type</th><th>Thickness (mm)</th><th>Modulus E (MPa)</th><th>Poisson's ratio ν</th><th style="width:14%">Asphalt: %bitumen by volume</th><th></th></tr></thead>
+        <tbody id="meLayerRows">
+    <tr data-idx="0">
+      <td><select id="meType0" onchange="meTypeChanged(0)"><option value="asphalt" selected="">Asphalt (Eq. 6.15)</option><option value="cem_base">Cemented granular base 4–5% (Table 6.7)</option><option value="cem_subbase_crushed">Cemented crushed rock subbase 3–4% (Table 6.7)</option><option value="cem_subbase_natural">Cemented natural gravel subbase 4–5% (Table 6.7)</option><option value="granular">Unbound granular (no fatigue check)</option></select></td>
+      <td><input type="number" id="meH0" value="100" min="1" step="1"></td>
+      <td><input type="number" id="meE0" value="3000" min="1" step="1"></td>
+      <td><input type="number" id="meNu0" value="0.4" min="0" max="0.5" step="0.01"></td>
+      <td><input type="number" id="meVb0" value="11" min="0" step="0.5"></td>
+      <td><button class="btn secondary" style="padding:6px 10px;" onclick="meRemoveLayer(0)">✕</button></td>
+    </tr>
+    <tr data-idx="1">
+      <td><select id="meType1" onchange="meTypeChanged(1)"><option value="asphalt">Asphalt (Eq. 6.15)</option><option value="cem_base">Cemented granular base 4–5% (Table 6.7)</option><option value="cem_subbase_crushed">Cemented crushed rock subbase 3–4% (Table 6.7)</option><option value="cem_subbase_natural">Cemented natural gravel subbase 4–5% (Table 6.7)</option><option value="granular" selected="">Unbound granular (no fatigue check)</option></select></td>
+      <td><input type="number" id="meH1" value="200" min="1" step="1"></td>
+      <td><input type="number" id="meE1" value="350" min="1" step="1"></td>
+      <td><input type="number" id="meNu1" value="0.35" min="0" max="0.5" step="0.01"></td>
+      <td><input type="number" id="meVb1" value="11" min="0" step="0.5" disabled=""></td>
+      <td><button class="btn secondary" style="padding:6px 10px;" onclick="meRemoveLayer(1)">✕</button></td>
+    </tr>
+    <tr data-idx="2">
+      <td><select id="meType2" onchange="meTypeChanged(2)"><option value="asphalt">Asphalt (Eq. 6.15)</option><option value="cem_base">Cemented granular base 4–5% (Table 6.7)</option><option value="cem_subbase_crushed">Cemented crushed rock subbase 3–4% (Table 6.7)</option><option value="cem_subbase_natural">Cemented natural gravel subbase 4–5% (Table 6.7)</option><option value="granular" selected="">Unbound granular (no fatigue check)</option></select></td>
+      <td><input type="number" id="meH2" value="200" min="1" step="1"></td>
+      <td><input type="number" id="meE2" value="150" min="1" step="1"></td>
+      <td><input type="number" id="meNu2" value="0.35" min="0" max="0.5" step="0.01"></td>
+      <td><input type="number" id="meVb2" value="11" min="0" step="0.5" disabled=""></td>
+      <td><button class="btn secondary" style="padding:6px 10px;" onclick="meRemoveLayer(2)">✕</button></td>
+    </tr><tr style="background:#faf6ee;">
+    <td><b>Subgrade</b> (semi-infinite)</td>
+    <td style="color:var(--muted);">∞</td>
+    <td><input type="number" id="meEsub" value="50" min="1" step="1"></td>
+    <td><input type="number" id="meNusub" value="0.45" min="0" max="0.5" step="0.01"></td>
+    <td>—</td><td></td></tr></tbody>
+      </table>
+      <div class="row-actions">
+        <button class="btn secondary" onclick="meAddLayer()">+ Add layer above subgrade</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Design Wheel Load (single circle, on-axis)</h2>
+      <div class="clause">D3 102-2024 Figure 8.2 — Standard Axle load model. Pick a preset circle or enter custom values. Only the
+        response directly under the centre of this single circle is evaluated (see scope limitation above).</div>
+      <div class="grid">
+        <div class="field">
+          <label>Load preset</label>
+          <select id="meLoadPreset" onchange="meApplyPreset()">
+            <option value="sast">Single-tyred Standard Axle (SAST) circle — 800 kPa, r=102.4 mm</option>
+            <option value="sadt">Dual-tyred Standard Axle (SADT) single circle — 750 kPa, r=92.1 mm</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Contact stress (kPa)</label>
+          <input type="number" id="meP" value="800" min="0" step="10">
+        </div>
+        <div class="field">
+          <label>Contact circle radius (mm)</label>
+          <input type="number" id="meA" value="102.4" min="1" step="0.1">
+        </div>
+        <div class="field">
+          <label>Design traffic, DESA (ESA) <span class="hint">auto-filled from Tab 1 if calculated</span></label>
+          <input type="number" id="meDesa" value="1000000" min="0" step="10000">
+        </div>
+        <div class="field">
+          <label>Asphalt design reliability level <span class="hint">Table 6.9 — sets RF for Eq. 6.15</span></label>
+          <select id="meReliability">
+            <option value="50">50%</option>
+            <option value="80">80%</option>
+            <option value="85">85%</option>
+            <option value="90" selected="">90%</option>
+            <option value="95">95%</option>
+            <option value="97.5">97.5%</option>
+          </select>
+        </div>
+      </div>
+      <div class="row-actions">
+        <button class="btn secondary" onclick="mePullDesa()">Pull DESA from Tab 1</button>
+        <button class="btn" onclick="computeME()">Run layered-elastic analysis</button>
+      </div>
+      <div id="meComputeMsg" class="note"></div>
+    </div>
+
+    <div class="card" id="meResultCard" style="display:none;">
+      <h2>Critical Strains &amp; Fatigue Life — Findings</h2>
+      <table>
+        <thead><tr><th>Layer</th><th>Critical response</th><th>Value</th><th>Criterion</th><th>Allowable ESA (N)</th><th>Design ESA</th><th>Status</th></tr></thead>
+        <tbody id="meFindings"></tbody>
+      </table>
+      <div class="note">Subgrade check per Equation 5.2 (N=(9150/µε)⁷). Cemented-material check per Equation 6.8, presumptive K
+        from Table 6.7 (N=(K/µε)¹²). Asphalt check per Equation 6.15, SF=6 (presumptive), RF from Table 6.9 by
+        reliability level.</div>
+    </div>
+  </section>
+
+  <!-- ================= TAB 5: REPORT ================= -->
   <section id="tab-report" class="panel">
     <div class="card no-print">
       <h2>Generate Compliance Review Report</h2>
-      <div class="clause">Compiles the results from Tabs 1–3 into the MPWT compliance review format.</div>
+      <div class="clause">Compiles the results from Tabs 1–4 into the MPWT compliance review format.</div>
       <div class="grid">
         <div class="field"><label>Project / document name</label><input type="text" id="repProject" placeholder="e.g. Provincial Road P6R12, PK2+160–PK5+330"></div>
         <div class="field"><label>Reviewer</label><input type="text" id="repReviewer" placeholder="Name / title"></div>
@@ -594,7 +726,7 @@ const DOWEL_TABLE = [
 /* ============================================================
    SHARED STATE
    ============================================================ */
-const STATE = { traffic: null, flexible: null, rigid: null, flexible84: null };
+const STATE = { traffic: null, flexible: null, rigid: null, flexible84: null, mech: null };
 
 // Figure 8.4 layer material descriptions (§8.3.2)
 const FIG84_MATERIALS = {
@@ -1095,6 +1227,12 @@ function buildReport(){
     findings.push({p:'Rigid pavement — flexural strength', req:'≥ '+STATE.rigid.reqFlex+' MPa (§9.3.3)', sub:STATE.rigid.flex+' MPa',
       status: STATE.rigid.flex>=STATE.rigid.reqFlex?'PASS':'FAIL'});
   }
+  if (STATE.mech){
+    STATE.mech.results.forEach(r=>{
+      findings.push({p:'⚠️ EXPERIMENTAL — '+r.layer+' ('+r.response+')', req:r.criterion+' — allow N='+fmt(r.Nallow,0)+' ESA',
+        sub: fmt(STATE.mech.desa,0)+' ESA design vs '+r.strain.toFixed(1)+' µε', status: r.status});
+    });
+  }
 
   findings.forEach(f=>{ if(f.status==='FAIL') anyFail=true; if(f.status==='CHECK'||f.status==='MISSING') anyCheck=true; });
 
@@ -1135,8 +1273,346 @@ function buildReport(){
         finalising any structure shown here.</li>
       <li>All figures are transcribed from D3 102-2024; verify against the source PDF for any submission to MPWT /
         GDPW.</li>
+      ${STATE.mech ? '<li><b>⚠️ Any row above from Tab 4 (Mechanistic-Empirical) is produced by an experimental, ' +
+        'independently-derived layered-elastic solver that is not part of the official MPWT specification and has ' +
+        'not been validated against AustPADS/CIRCLY or reviewed by MPWT. Do not rely on these rows for a submission ' +
+        'without independent verification by a qualified pavement engineer.</b></li>' : ''}
     </ul>`;
   document.getElementById('reportCard').style.display = 'block';
+}
+
+/* ============================================================
+   TAB 4 — MECHANISTIC-EMPIRICAL / LAYERED-ELASTIC (EXPERIMENTAL)
+   D3 102-2024 §8.2 delegates the layered-elastic strain calculation to
+   external software ("computer programs such as AustPADS") and does not
+   itself provide the method. Everything below is an independent from-
+   scratch implementation of n-layer axisymmetric elastic (Burmister-type)
+   theory, via Love's biharmonic strain function and Hankel-transform
+   inversion, evaluated on-axis (directly beneath the centre of a single
+   circular load) using Gauss-Legendre quadrature and a Bessel J0/J1
+   evaluator via Miller's downward recurrence.
+   Validated against: (1) the closed-form Boussinesq single-layer solution
+   (machine precision), and (2) a published 3-layer benchmark (Jones 1962,
+   cross-checked by Wang/Roesler/Guo 2011) to 4-5 significant figures.
+   NOT validated against AustPADS/CIRCLY or any MPWT-recognised software —
+   see the warning banner in Tab 4. Do not use for MPWT submissions without
+   independent verification by a qualified pavement engineer.
+   ============================================================ */
+
+// ---- Bessel J0, J1 via Miller's downward recurrence (numerically stable for all x>=0) ----
+function meBesselJ01(x){
+  x = Math.abs(x);
+  if (x===0) return {J0:1,J1:0};
+  let M = Math.ceil(x+15*Math.sqrt(x)+20);
+  if (M%2!==0) M+=1;
+  let Jkp1=0, Jk=1e-30, sumEven=0, J1raw=null, J0raw=null;
+  for (let k=M;k>=1;k--){
+    const Jkm1 = (2*k/x)*Jk - Jkp1;
+    Jkp1 = Jk; Jk = Jkm1;
+    if (k-1===1) J1raw = Jkm1;
+    if (k-1===0) J0raw = Jkm1;
+    if ((k-1)%2===0) sumEven += (k-1===0 ? Jkm1 : 2*Jkm1);
+  }
+  return {J0:J0raw/sumEven, J1:J1raw/sumEven};
+}
+function meJ1(x){ return meBesselJ01(x).J1; }
+
+// ---- Gauss-Legendre quadrature nodes/weights (Newton iteration) ----
+function meGaussLegendre(n){
+  const x=new Array(n), w=new Array(n);
+  const mm=Math.floor((n+1)/2);
+  for (let i=0;i<mm;i++){
+    let z=Math.cos(Math.PI*(i+0.75)/(n+0.5)), z1, pp;
+    do {
+      let p1=1,p2=0;
+      for (let j=0;j<n;j++){ const p3=p2; p2=p1; p1=((2*j+1)*z*p2-j*p3)/(j+1); }
+      pp = n*(z*p1-p2)/(z*z-1);
+      z1=z; z=z1-p1/pp;
+    } while (Math.abs(z-z1)>1e-15);
+    x[i]=-z; x[n-1-i]=z; w[i]=2/((1-z*z)*pp*pp); w[n-1-i]=w[i];
+  }
+  return {x,w};
+}
+
+// ---- Love strain-function branch (A+B*s)*e^{-m*s}: field coefficients ----
+// dir=+1 for a "top-referenced" branch (s = local depth from top of layer),
+// dir=-1 for a "bottom-referenced" branch (s = local height above bottom of layer) —
+// this dual-reference parametrisation keeps every exponential in e^{-m*s}, s>=0,
+// so nothing overflows even for large m * (large finite layer thickness).
+function meBranchCoeffs(dir, s, m, nu){
+  const e = Math.exp(-m*s), m2=m*m, m3=m2*m;
+  return {
+    e,
+    uz:  { A:-m2,             B:-m*(2-4*nu)-m2*s },
+    ur:  { A:dir*(-m2),       B:dir*(m-m2*s) },
+    sz:  { A:dir*m3,          B:dir*(m2*(1-2*nu)+m3*s) },
+    trz: { A:m3,              B:m3*s-2*nu*m2 },
+    Sig: { A:dir*(-m3),       B:dir*(m2*(1+4*nu)-m3*s) },
+  };
+}
+
+function meSolveLinear(Amat,bvec){
+  const n=bvec.length;
+  const M = Amat.map((row,i)=>row.slice().concat([bvec[i]]));
+  for (let col=0;col<n;col++){
+    let piv=col;
+    for (let r=col+1;r<n;r++) if (Math.abs(M[r][col])>Math.abs(M[piv][col])) piv=r;
+    if (piv!==col){ const t=M[col]; M[col]=M[piv]; M[piv]=t; }
+    const pv=M[col][col];
+    if (Math.abs(pv)<1e-300) continue;
+    for (let r=0;r<n;r++){
+      if (r===col) continue;
+      const f = M[r][col]/pv;
+      if (f===0) continue;
+      for (let c=col;c<=n;c++) M[r][c]-=f*M[col][c];
+    }
+  }
+  const x=new Array(n);
+  for (let i=0;i<n;i++) x[i]=M[i][n]/M[i][i];
+  return x;
+}
+
+// layers: [{h,E,nu}, ...] finite layers top->bottom; bottomLayer:{E,nu} semi-infinite.
+// Assembles and solves the interface-continuity linear system (sigma_z, tau_rz, u_z, u_r
+// continuous at each bonded interface) for a given transform parameter m and surface load sigma0(m).
+function meBuildSystem(layers, bottomLayer){
+  const nFinite = layers.length;
+  const nUnk = 4*nFinite+2;
+  const G = layers.map(L=>L.E/(2*(1+L.nu))).concat([bottomLayer.E/(2*(1+bottomLayer.nu))]);
+  const nu = layers.map(L=>L.nu).concat([bottomLayer.nu]);
+  const idxA=i=> i<nFinite?4*i:4*nFinite;
+  const idxB=i=> i<nFinite?4*i+1:4*nFinite+1;
+  const idxP=i=> 4*i+2, idxQ=i=>4*i+3;
+
+  function solveM(m, sigma0){
+    const Amat=[], bvec=[];
+    function newRow(){ const row=new Array(nUnk).fill(0); Amat.push(row); bvec.push(0); return row; }
+    { const row=newRow();
+      const top=meBranchCoeffs(1,0,m,nu[0]);
+      row[idxA(0)]+=top.e*top.sz.A; row[idxB(0)]+=top.e*top.sz.B;
+      if (nFinite>0){ const bot=meBranchCoeffs(-1,layers[0].h,m,nu[0]); row[idxP(0)]+=bot.e*bot.sz.A; row[idxQ(0)]+=bot.e*bot.sz.B; }
+      bvec[bvec.length-1]=sigma0;
+    }
+    { const row=newRow();
+      const top=meBranchCoeffs(1,0,m,nu[0]);
+      row[idxA(0)]+=top.e*top.trz.A; row[idxB(0)]+=top.e*top.trz.B;
+      if (nFinite>0){ const bot=meBranchCoeffs(-1,layers[0].h,m,nu[0]); row[idxP(0)]+=bot.e*bot.trz.A; row[idxQ(0)]+=bot.e*bot.trz.B; }
+    }
+    for (let k=0;k<nFinite;k++){
+      const hk=layers[k].h, nuK=nu[k], nuK1=nu[k+1];
+      const isLastFinite = (k+1===nFinite);
+      const kTop=meBranchCoeffs(1,hk,m,nuK), kBot=meBranchCoeffs(-1,0,m,nuK);
+      const k1Top=meBranchCoeffs(1,0,m,nuK1);
+      const k1Bot = isLastFinite? null : meBranchCoeffs(-1,layers[k+1].h,m,nuK1);
+      { const row=newRow();
+        row[idxA(k)]+=kTop.e*kTop.sz.A; row[idxB(k)]+=kTop.e*kTop.sz.B;
+        row[idxP(k)]+=kBot.e*kBot.sz.A; row[idxQ(k)]+=kBot.e*kBot.sz.B;
+        row[idxA(k+1)]-=k1Top.e*k1Top.sz.A; row[idxB(k+1)]-=k1Top.e*k1Top.sz.B;
+        if (!isLastFinite){ row[idxP(k+1)]-=k1Bot.e*k1Bot.sz.A; row[idxQ(k+1)]-=k1Bot.e*k1Bot.sz.B; }
+      }
+      { const row=newRow();
+        row[idxA(k)]+=kTop.e*kTop.trz.A; row[idxB(k)]+=kTop.e*kTop.trz.B;
+        row[idxP(k)]+=kBot.e*kBot.trz.A; row[idxQ(k)]+=kBot.e*kBot.trz.B;
+        row[idxA(k+1)]-=k1Top.e*k1Top.trz.A; row[idxB(k+1)]-=k1Top.e*k1Top.trz.B;
+        if (!isLastFinite){ row[idxP(k+1)]-=k1Bot.e*k1Bot.trz.A; row[idxQ(k+1)]-=k1Bot.e*k1Bot.trz.B; }
+      }
+      { const row=newRow(); const gk=1/(2*G[k]), gk1=1/(2*G[k+1]);
+        row[idxA(k)]+=gk*kTop.e*kTop.uz.A; row[idxB(k)]+=gk*kTop.e*kTop.uz.B;
+        row[idxP(k)]+=gk*kBot.e*kBot.uz.A; row[idxQ(k)]+=gk*kBot.e*kBot.uz.B;
+        row[idxA(k+1)]-=gk1*k1Top.e*k1Top.uz.A; row[idxB(k+1)]-=gk1*k1Top.e*k1Top.uz.B;
+        if (!isLastFinite){ row[idxP(k+1)]-=gk1*k1Bot.e*k1Bot.uz.A; row[idxQ(k+1)]-=gk1*k1Bot.e*k1Bot.uz.B; }
+      }
+      { const row=newRow(); const gk=1/(2*G[k]), gk1=1/(2*G[k+1]);
+        row[idxA(k)]+=gk*kTop.e*kTop.ur.A; row[idxB(k)]+=gk*kTop.e*kTop.ur.B;
+        row[idxP(k)]+=gk*kBot.e*kBot.ur.A; row[idxQ(k)]+=gk*kBot.e*kBot.ur.B;
+        row[idxA(k+1)]-=gk1*k1Top.e*k1Top.ur.A; row[idxB(k+1)]-=gk1*k1Top.e*k1Top.ur.B;
+        if (!isLastFinite){ row[idxP(k+1)]-=gk1*k1Bot.e*k1Bot.ur.A; row[idxQ(k+1)]-=gk1*k1Bot.e*k1Bot.ur.B; }
+      }
+    }
+    return meSolveLinear(Amat,bvec);
+  }
+
+  function evalFields(coefs, layerIndex, zLocal, m){
+    const nuI = nu[layerIndex];
+    let sz=0, Sig=0;
+    const top = meBranchCoeffs(1, zLocal, m, nuI);
+    const A=coefs[idxA(layerIndex)], B=coefs[idxB(layerIndex)];
+    sz += top.e*(top.sz.A*A+top.sz.B*B);
+    Sig += top.e*(top.Sig.A*A+top.Sig.B*B);
+    if (layerIndex<nFinite){
+      const hI = layers[layerIndex].h;
+      const bot = meBranchCoeffs(-1, hI-zLocal, m, nuI);
+      const P=coefs[idxP(layerIndex)], Q=coefs[idxQ(layerIndex)];
+      sz += bot.e*(bot.sz.A*P+bot.sz.B*Q);
+      Sig += bot.e*(bot.Sig.A*P+bot.Sig.B*Q);
+    }
+    return {sz,Sig};
+  }
+  return {solveM, evalFields, nFinite};
+}
+
+// On-axis (r=0, directly beneath the load centre) physical (compression-positive) sigma_z, sigma_r
+// at (layerIndex, zLocal), for a single uniform circular load of radius a and pressure p (same length/stress units).
+function meOnAxisStress(layers, bottomLayer, a, p, layerIndex, zLocal, mMax, nPanels, nPerPanel){
+  const sys = meBuildSystem(layers, bottomLayer);
+  function sigma0(m){ return -p*a*meJ1(m*a)/m; }
+  let sz=0, Sig=0;
+  const {x,w} = meGaussLegendre(nPerPanel);
+  const h = mMax/nPanels;
+  for (let pi=0; pi<nPanels; pi++){
+    const aa=pi*h, bb=(pi+1)*h, mid=(aa+bb)/2, half=(bb-aa)/2;
+    for (let i=0;i<nPerPanel;i++){
+      const m = mid+half*x[i];
+      const s0 = sigma0(m);
+      const coefs = sys.solveM(m, s0);
+      const f = sys.evalFields(coefs, layerIndex, zLocal, m);
+      sz += w[i]*half*m*f.sz;   // J0(0)=1 on-axis
+      Sig += w[i]*half*m*f.Sig;
+    }
+  }
+  return { sigZ:-sz, sigR:-Sig/2 };
+}
+
+// ---- Layer input UI ----
+let meLayers = [
+  {type:'asphalt', h:100, E:3000, nu:0.4, vb:11},
+  {type:'granular', h:200, E:350, nu:0.35, vb:11},
+  {type:'granular', h:200, E:150, nu:0.35, vb:11},
+];
+let meSubgrade = {E:50, nu:0.45};
+
+const ME_TYPES = {
+  asphalt: 'Asphalt (Eq. 6.15)',
+  cem_base: 'Cemented granular base 4–5% (Table 6.7)',
+  cem_subbase_crushed: 'Cemented crushed rock subbase 3–4% (Table 6.7)',
+  cem_subbase_natural: 'Cemented natural gravel subbase 4–5% (Table 6.7)',
+  granular: 'Unbound granular (no fatigue check)',
+};
+const ME_K = { cem_base:235, cem_subbase_crushed:233, cem_subbase_natural:261 };
+const ME_RF = { '50':1.0, '80':2.4, '85':3.0, '90':3.9, '95':6.0, '97.5':9.0 };
+
+function meRenderLayers(){
+  const body = document.getElementById('meLayerRows');
+  let html = meLayers.map((L,i)=>`
+    <tr data-idx="${i}">
+      <td><select id="meType${i}" onchange="meTypeChanged(${i})">${Object.entries(ME_TYPES).map(([k,v])=>`<option value="${k}" ${L.type===k?'selected':''}>${v}</option>`).join('')}</select></td>
+      <td><input type="number" id="meH${i}" value="${L.h}" min="1" step="1"></td>
+      <td><input type="number" id="meE${i}" value="${L.E}" min="1" step="1"></td>
+      <td><input type="number" id="meNu${i}" value="${L.nu}" min="0" max="0.5" step="0.01"></td>
+      <td><input type="number" id="meVb${i}" value="${L.vb||11}" min="0" step="0.5" ${L.type==='asphalt'?'':'disabled'}></td>
+      <td><button class="btn secondary" style="padding:6px 10px;" onclick="meRemoveLayer(${i})">✕</button></td>
+    </tr>`).join('');
+  html += `<tr style="background:#faf6ee;">
+    <td><b>Subgrade</b> (semi-infinite)</td>
+    <td style="color:var(--muted);">∞</td>
+    <td><input type="number" id="meEsub" value="${meSubgrade.E}" min="1" step="1"></td>
+    <td><input type="number" id="meNusub" value="${meSubgrade.nu}" min="0" max="0.5" step="0.01"></td>
+    <td>—</td><td></td></tr>`;
+  body.innerHTML = html;
+}
+function meTypeChanged(i){
+  const vbInput = document.getElementById('meVb'+i);
+  const type = document.getElementById('meType'+i).value;
+  vbInput.disabled = (type!=='asphalt');
+}
+function meSyncFromDom(){
+  meLayers.forEach((L,i)=>{
+    const t=document.getElementById('meType'+i); if(!t) return;
+    L.type = t.value;
+    L.h = parseFloat(document.getElementById('meH'+i).value)||L.h;
+    L.E = parseFloat(document.getElementById('meE'+i).value)||L.E;
+    L.nu = parseFloat(document.getElementById('meNu'+i).value);
+    L.vb = parseFloat(document.getElementById('meVb'+i).value)||L.vb;
+  });
+  const esub=document.getElementById('meEsub'), nusub=document.getElementById('meNusub');
+  if (esub){ meSubgrade.E = parseFloat(esub.value)||meSubgrade.E; meSubgrade.nu = parseFloat(nusub.value); }
+}
+function meAddLayer(){
+  meSyncFromDom();
+  meLayers.push({type:'granular', h:150, E:200, nu:0.35, vb:11});
+  meRenderLayers();
+}
+function meRemoveLayer(i){
+  meSyncFromDom();
+  if (meLayers.length<=1){ alert('At least one layer above the subgrade is required.'); return; }
+  meLayers.splice(i,1);
+  meRenderLayers();
+}
+meRenderLayers();
+
+function meApplyPreset(){
+  const v = document.getElementById('meLoadPreset').value;
+  if (v==='sast'){ document.getElementById('meP').value=800; document.getElementById('meA').value=102.4; }
+  else if (v==='sadt'){ document.getElementById('meP').value=750; document.getElementById('meA').value=92.1; }
+}
+function mePullDesa(){
+  if (STATE.traffic && STATE.traffic.DESA){ document.getElementById('meDesa').value = Math.round(STATE.traffic.DESA); }
+  else alert('Run Tab 1 (Design Traffic) first.');
+}
+
+function computeME(){
+  meSyncFromDom();
+  const pKpa = parseFloat(document.getElementById('meP').value);
+  const aMm = parseFloat(document.getElementById('meA').value);
+  const desa = parseFloat(document.getElementById('meDesa').value);
+  const RFsel = document.getElementById('meReliability').value;
+  const p = pKpa/1000; // MPa (N/mm^2), consistent with E in MPa and lengths in mm
+  const a = aMm;
+
+  const layers = meLayers.map(L=>({h:L.h, E:L.E, nu:L.nu}));
+  const bottomLayer = {E:meSubgrade.E, nu:meSubgrade.nu};
+
+  const minL = Math.min(a, ...meLayers.map(L=>L.h));
+  const maxL = Math.max(a, ...meLayers.map(L=>L.h), 2000);
+  const mMax = Math.min(30/minL, 5);
+  const nPanels = Math.min(Math.max(Math.ceil(mMax*maxL/8)+50, 100), 600);
+  const nPerPanel = 12;
+
+  const msg = document.getElementById('meComputeMsg');
+  msg.textContent = 'Computing… (this experimental solver runs a full linear-elastic quadrature; may take a moment)';
+
+  setTimeout(()=>{
+    const results = [];
+    meLayers.forEach((L,i)=>{
+      if (L.type==='asphalt' || L.type.startsWith('cem_')){
+        const r = meOnAxisStress(layers, bottomLayer, a, p, i, L.h, mMax, nPanels, nPerPanel);
+        const epsT = ((1-L.nu)*r.sigR - L.nu*r.sigZ)/L.E; // on-axis: negative = tensile (governing case)
+        const strainMicro = Math.abs(epsT)*1e6;
+        let Nallow, criterion, response;
+        if (L.type==='asphalt'){
+          const SF=6, RF = ME_RF[RFsel] || 3.9, Vb = L.vb;
+          const term = (SF/RF) * 6918*(0.856*Vb+1.08) / (Math.pow(L.E,0.36) * strainMicro);
+          Nallow = Math.pow(term,5);
+          criterion = 'Eq. 6.15, SF=6, RF='+RF+' (reliability '+RFsel+'%), Vb='+Vb+'%';
+          response = 'Horiz. tensile strain, bottom of asphalt';
+        } else {
+          const K = ME_K[L.type];
+          Nallow = Math.pow(K/strainMicro, 12);
+          criterion = 'Eq. 6.8, K='+K+' (Table 6.7)';
+          response = 'Horiz. tensile strain, bottom of layer';
+        }
+        results.push({layer:'Layer '+(i+1)+' ('+ME_TYPES[L.type]+')', response, strain:strainMicro, criterion, Nallow, status: Nallow>=desa?'PASS':'FAIL'});
+      }
+    });
+    {
+      const nFinite = meLayers.length;
+      const r = meOnAxisStress(layers, bottomLayer, a, p, nFinite, 0, mMax, nPanels, nPerPanel);
+      const epsZ = (r.sigZ - 2*meSubgrade.nu*r.sigR)/meSubgrade.E;
+      const strainMicro = Math.abs(epsZ)*1e6;
+      const Nallow = Math.pow(9150/strainMicro, 7);
+      results.push({layer:'Subgrade', response:'Vert. compressive strain, top of subgrade', strain:strainMicro,
+        criterion:'Eq. 5.2', Nallow, status: Nallow>=desa?'PASS':'FAIL'});
+    }
+
+    STATE.mech = { desa, results };
+
+    document.getElementById('meFindings').innerHTML = results.map(r=>
+      `<tr><td>${r.layer}</td><td>${r.response}</td><td>${r.strain.toFixed(1)} µε</td><td>${r.criterion}</td>
+       <td>${fmt(r.Nallow,0)} ESA</td><td>${fmt(desa,0)} ESA</td>
+       <td><span class="badge-status ${r.status==='PASS'?'ok':'bad'}">${r.status}</span></td></tr>`).join('');
+    document.getElementById('meResultCard').style.display='block';
+    msg.textContent = '⚠️ Done — remember this module is experimental and unvalidated against AustPADS/CIRCLY (see warning above).';
+  }, 20);
 }
 </script>
 
