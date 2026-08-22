@@ -1,7 +1,7 @@
 <!DOCTYPE html>
-<!-- saved from url=(0050)file:///D:/docs/download/mpwt_pavement_tool_4.html -->
-<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-
+<html lang="en">
+<head>
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MPWT Pavement Design &amp; Compliance Tool — D3 102-2024</title>
 <style>
@@ -118,6 +118,12 @@
     is an independently-built implementation of that general theory — <b>not part of the official MPWT specification,
     unvalidated against MPWT-recognised software, and not to be used for a submission without an engineer's independent
     check.</b> See the warning banner on that tab for details.
+    <b>Tab 5 (Overlay Design)</b> implements Section 12.3, the empirical design of granular overlays for rehabilitating
+    granular pavements (deflection testing, seasonal/device adjustment, characteristic deflection, and overlay
+    thickness — fully closed-form, valid to 10<sup>8</sup> ESA). Section 12.4's mechanistic-empirical strengthening
+    design (for pavements with asphalt/cemented layers) requires FWD deflection-bowl back-calculation software this
+    tool does not implement; that tab explains the gap and how to combine externally back-calculated moduli with the
+    Tab 4 solver.
   </div>
 
   <nav class="tabs">
@@ -125,7 +131,8 @@
     <button class="tab-btn" data-tab="flexible">2. Flexible Pavement</button>
     <button class="tab-btn" data-tab="rigid">3. Rigid Pavement</button>
     <button class="tab-btn" data-tab="me">4. Mechanistic-Empirical (Experimental)</button>
-    <button class="tab-btn" data-tab="report">5. Compliance Report</button>
+    <button class="tab-btn" data-tab="overlay">5. Overlay Design</button>
+    <button class="tab-btn" data-tab="report">6. Compliance Report</button>
   </nav>
 
   <!-- ================= TAB 1: DESIGN TRAFFIC ================= -->
@@ -192,7 +199,7 @@
         </div>
         <div class="field">
           <label>Traffic load distribution <span class="hint">presumptive ESA/HVAG — Appendix E</span></label>
-          <select id="tld"><option value="collector_buses">Collector road — with buses (ESA/HVAG 0.65)</option><option value="collector_nobuses">Collector road — no buses (ESA/HVAG 0.59)</option><option value="local_industrial">Local access — industrial area (ESA/HVAG 0.51)</option><option value="local_buses">Local access — with buses (ESA/HVAG 0.44)</option><option value="local_nobuses">Local access — no buses (ESA/HVAG 0.27)</option><option value="minor">Minor road (ESA/HVAG 0.45)</option><option value="manual">Manual entry (project-specific WIM data)</option></select>
+          <select id="tld"></select>
         </div>
         <div class="field">
           <label>Predominant heavy-vehicle axle loads <span class="hint">used in Sec. 11 catalogue lookup</span></label>
@@ -475,36 +482,7 @@
         interface), the standard Burmister assumption.</div>
       <table id="meLayerTable">
         <thead><tr><th style="width:16%">Layer type</th><th>Thickness (mm)</th><th>Modulus E (MPa)</th><th>Poisson's ratio ν</th><th style="width:14%">Asphalt: %bitumen by volume</th><th></th></tr></thead>
-        <tbody id="meLayerRows">
-    <tr data-idx="0">
-      <td><select id="meType0" onchange="meTypeChanged(0)"><option value="asphalt" selected="">Asphalt (Eq. 6.15)</option><option value="cem_base">Cemented granular base 4–5% (Table 6.7)</option><option value="cem_subbase_crushed">Cemented crushed rock subbase 3–4% (Table 6.7)</option><option value="cem_subbase_natural">Cemented natural gravel subbase 4–5% (Table 6.7)</option><option value="granular">Unbound granular (no fatigue check)</option></select></td>
-      <td><input type="number" id="meH0" value="100" min="1" step="1"></td>
-      <td><input type="number" id="meE0" value="3000" min="1" step="1"></td>
-      <td><input type="number" id="meNu0" value="0.4" min="0" max="0.5" step="0.01"></td>
-      <td><input type="number" id="meVb0" value="11" min="0" step="0.5"></td>
-      <td><button class="btn secondary" style="padding:6px 10px;" onclick="meRemoveLayer(0)">✕</button></td>
-    </tr>
-    <tr data-idx="1">
-      <td><select id="meType1" onchange="meTypeChanged(1)"><option value="asphalt">Asphalt (Eq. 6.15)</option><option value="cem_base">Cemented granular base 4–5% (Table 6.7)</option><option value="cem_subbase_crushed">Cemented crushed rock subbase 3–4% (Table 6.7)</option><option value="cem_subbase_natural">Cemented natural gravel subbase 4–5% (Table 6.7)</option><option value="granular" selected="">Unbound granular (no fatigue check)</option></select></td>
-      <td><input type="number" id="meH1" value="200" min="1" step="1"></td>
-      <td><input type="number" id="meE1" value="350" min="1" step="1"></td>
-      <td><input type="number" id="meNu1" value="0.35" min="0" max="0.5" step="0.01"></td>
-      <td><input type="number" id="meVb1" value="11" min="0" step="0.5" disabled=""></td>
-      <td><button class="btn secondary" style="padding:6px 10px;" onclick="meRemoveLayer(1)">✕</button></td>
-    </tr>
-    <tr data-idx="2">
-      <td><select id="meType2" onchange="meTypeChanged(2)"><option value="asphalt">Asphalt (Eq. 6.15)</option><option value="cem_base">Cemented granular base 4–5% (Table 6.7)</option><option value="cem_subbase_crushed">Cemented crushed rock subbase 3–4% (Table 6.7)</option><option value="cem_subbase_natural">Cemented natural gravel subbase 4–5% (Table 6.7)</option><option value="granular" selected="">Unbound granular (no fatigue check)</option></select></td>
-      <td><input type="number" id="meH2" value="200" min="1" step="1"></td>
-      <td><input type="number" id="meE2" value="150" min="1" step="1"></td>
-      <td><input type="number" id="meNu2" value="0.35" min="0" max="0.5" step="0.01"></td>
-      <td><input type="number" id="meVb2" value="11" min="0" step="0.5" disabled=""></td>
-      <td><button class="btn secondary" style="padding:6px 10px;" onclick="meRemoveLayer(2)">✕</button></td>
-    </tr><tr style="background:#faf6ee;">
-    <td><b>Subgrade</b> (semi-infinite)</td>
-    <td style="color:var(--muted);">∞</td>
-    <td><input type="number" id="meEsub" value="50" min="1" step="1"></td>
-    <td><input type="number" id="meNusub" value="0.45" min="0" max="0.5" step="0.01"></td>
-    <td>—</td><td></td></tr></tbody>
+        <tbody id="meLayerRows"></tbody>
       </table>
       <div class="row-actions">
         <button class="btn secondary" onclick="meAddLayer()">+ Add layer above subgrade</button>
@@ -542,7 +520,7 @@
             <option value="50">50%</option>
             <option value="80">80%</option>
             <option value="85">85%</option>
-            <option value="90" selected="">90%</option>
+            <option value="90" selected>90%</option>
             <option value="95">95%</option>
             <option value="97.5">97.5%</option>
           </select>
@@ -567,7 +545,180 @@
     </div>
   </section>
 
-  <!-- ================= TAB 5: REPORT ================= -->
+  <!-- ================= TAB 5: OVERLAY DESIGN ================= -->
+  <section id="tab-overlay" class="panel">
+    <div class="card">
+      <h2>Overlay Design — Rehabilitation of Existing Pavements</h2>
+      <div class="clause">D3 102-2024 Section 12 — Overlays for Flexible Pavements.</div>
+      <p style="font-size:.88rem;margin:0 0 8px;">
+        Section 12 covers two distinct routes, depending on whether the <b>existing</b> pavement contains asphalt
+        and/or cemented material:
+      </p>
+      <ul style="font-size:.88rem;margin:0 0 6px;">
+        <li><b>§12.3 — Empirical design of granular overlays</b> (implemented below): for existing pavements that are
+          <b>granular only</b> (no asphalt/cemented layers), valid up to 10<sup>8</sup> ESA. Fully closed-form —
+          deflection testing (Benkelman Beam or FWD) drives the required overlay thickness directly.</li>
+        <li><b>§12.4 — Mechanistic-empirical procedure (MEP) for strengthening treatments</b>: required whenever the
+          existing pavement contains asphalt and/or cemented material (asphalt overlays/inlays, major patching,
+          stabilisation). This route requires <b>back-calculating</b> the existing layer/subgrade moduli from
+          measured FWD deflection bowls — a specialist, iterative numerical process (§12.4.3–12.4.9) that needs
+          dedicated back-calculation software (e.g. EVERCALC, MODULUS, or a CIRCLY back-calculation module). <b>This
+          tool does not implement back-calculation</b> — see the guidance card at the bottom of this tab for how to
+          combine externally back-calculated moduli with the Tab 4 mechanistic-empirical solver.</li>
+      </ul>
+      <div class="warn-box">Confirm which route applies before proceeding: if the existing pavement includes any
+        asphalt or cemented/stabilised layer, the §12.3 granular-overlay calculator below does <b>not</b> apply to
+        it (§12.3.3) — go to the §12.4 guidance card instead.</div>
+    </div>
+
+    <div class="card">
+      <h2>Step 1 — Design Traffic &amp; Risk</h2>
+      <div class="clause">§12.3.2 (design period, typically 10–20 years) and §12.2 (acceptable risk / project reliability).</div>
+      <div class="grid">
+        <div class="field">
+          <label>Design traffic loading, N (ESA) <span class="hint">over the rehabilitation design period, §7</span></label>
+          <input type="number" id="ovDesa" value="1000000" min="1" step="10000">
+        </div>
+        <div class="field">
+          <label>Road type <span class="hint">Table 12.1 — informational; the empirical method has no formal reliability input</span></label>
+          <select id="ovRoadType">
+            <option value="95">Expressway / major national road / heavy-duty pavement (95%)</option>
+            <option value="90">Other, lane AADT &gt; 2,000 (90%)</option>
+            <option value="85" selected>Other, lane AADT &lt; 2,000 (85%)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Traffic conservatism multiplier <span class="hint">§12.2 — up to 2× for higher-than-normal risk of poor performance</span></label>
+          <input type="number" id="ovTrafficMult" value="1.0" min="1" max="2" step="0.1">
+        </div>
+      </div>
+      <div class="row-actions">
+        <button class="btn secondary" onclick="ovPullDesa()">Pull DESA from Tab 1</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Step 2 &amp; 3 — Deflection Testing, Seasonal &amp; Device Adjustment</h2>
+      <div class="clause">§12.3.1 — testing devices, seasonal moisture correction (Table 12.2), FWD standardisation (Table 12.3),
+        contact-stress adjustment (Equation 12.1).</div>
+      <div class="grid">
+        <div class="field">
+          <label>Test device</label>
+          <select id="ovDevice" onchange="ovToggleDevice()">
+            <option value="bb">Benkelman Beam — 80 kN dual-wheel axle, 550 kPa</option>
+            <option value="fwd" selected>FWD — 300 mm plate, 40 kN load (566 kPa reference)</option>
+          </select>
+        </div>
+        <div class="field" id="ovFwdStressField">
+          <label>FWD applied contact stress, σ<sub>x</sub> (kPa) <span class="hint">Eq. 12.1 — leave at 566 if load = 40 kN and no adjustment needed</span></label>
+          <input type="number" id="ovFwdStress" value="566" min="1" step="1">
+        </div>
+        <div class="field">
+          <label>Test month</label>
+          <select id="ovMonth">
+            <option value="1.0">June – November</option>
+            <option value="1.3">December – May</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Watertable within 3 m of surface? <span class="hint">Table 12.2 note 1 — forces seasonal factor to 1.0</span></label>
+          <select id="ovWatertable">
+            <option value="no" selected>No</option>
+            <option value="yes">Yes</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Existing pavement is granular only? <span class="hint">§12.3.3 — no asphalt/cemented layers present</span></label>
+          <select id="ovGranularOnly">
+            <option value="yes" selected>Yes</option>
+            <option value="no">No — use §12.4 MEP instead (see guidance card below)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Homogeneous sub-section length (m) <span class="hint">§12.3.1 — recommended &gt; 100 m</span></label>
+          <input type="number" id="ovSubLength" value="200" min="1" step="10">
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Step 4 — Homogeneous Sub-section &amp; Characteristic Deflection (CD)</h2>
+      <div class="clause">§12.3.1, Equation 12.2: CD = mean + f × SD (or the maximum value if fewer than 10 measurements),
+        f from Table 12.4.</div>
+      <div class="field">
+        <label>Measured maximum deflections, D₀ (mm) <span class="hint">paste raw readings for this sub-section, separated by
+          commas, spaces or newlines — before any adjustment</span></label>
+        <textarea id="ovDeflections" rows="3" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:7px;font-size:.92rem;font-family:inherit;" placeholder="e.g. 0.62, 0.58, 0.71, 0.65, 0.60, 0.55, 0.68, 0.73, 0.59, 0.64, 0.61, 0.57">0.62, 0.58, 0.71, 0.65, 0.60, 0.55, 0.68, 0.73, 0.59, 0.64, 0.61, 0.57</textarea>
+      </div>
+      <div class="row-actions">
+        <button class="btn" onclick="computeOverlay()">Calculate characteristic deflection &amp; overlay thickness</button>
+      </div>
+      <div id="ovStatsCard" style="display:none;">
+        <div class="stat-grid">
+          <div class="stat"><div class="lbl">n (measurements)</div><div class="val" id="ovStatN">—</div></div>
+          <div class="stat"><div class="lbl">Mean D₀</div><div class="val" id="ovStatMean">—</div></div>
+          <div class="stat"><div class="lbl">Std. deviation</div><div class="val" id="ovStatSD">—</div></div>
+          <div class="stat"><div class="lbl">Coefficient of variation</div><div class="val" id="ovStatCV">—</div></div>
+        </div>
+        <div id="ovCVWarn"></div>
+      </div>
+    </div>
+
+    <div class="card" id="ovResultCard" style="display:none;">
+      <h2>Steps 5–7 — Design Deflection, Overlay Requirement &amp; Thickness</h2>
+      <div class="clause">Equation 12.3: D = 18.6056 × N<sup>−0.2281</sup> (Figure 12.2). Overlay thickness derived from the
+        Figure 12.3 field-data basis (6% deflection reduction per 25 mm of granular overlay) — see note below.</div>
+      <div class="result-box" id="ovResultBox"></div>
+      <table>
+        <thead><tr><th>Quantity</th><th>Value</th><th>Basis</th></tr></thead>
+        <tbody id="ovCalcRows"></tbody>
+      </table>
+      <div class="note">
+        <b>On the overlay-thickness formula:</b> D3 102-2024 provides Figure 12.3 as a design chart, not a closed-form
+        equation. The Specification states the chart "is based on available field data that indicates a 6% reduction
+        in deflection for each 25 mm of granular overlay thickness" (§12.3.3). This tool reconstructs that stated
+        relationship as t = 25 × ln(CD<sub>factored</sub> / D<sub>design</sub>) / ln(0.94) (mm) — <b>this closed-form
+        expression is this tool's own derivation from the stated field-data basis, not a value transcribed directly
+        from the Specification.</b> Cross-check against the actual Figure 12.3 chart in the source PDF before using
+        for a submission.
+      </div>
+      <div class="note">Assumes a thin (&lt; 40 mm) bituminous surfacing after the overlay (§12.3). If the existing
+        pavement has a thin bituminous seal within 300 mm of the finished surface level, consider removing or
+        breaking it in wetter climates so water is not trapped in the overlay (§12.3.3).</div>
+    </div>
+
+    <div class="card" style="border:2px solid var(--warn);background:var(--warn-bg);">
+      <h2 style="color:var(--warn);margin-bottom:8px;">§12.4 — Mechanistic-Empirical Strengthening (Asphalt/Cemented Pavements)</h2>
+      <div class="clause" style="color:#6b4c0c;">For existing pavements containing asphalt and/or cemented material — not computed by this tool.</div>
+      <p style="font-size:.88rem;color:#6b4c0c;margin:0 0 8px;">
+        §12.4's MEP mirrors the new-pavement mechanistic-empirical procedure already implemented in <b>Tab 4</b>
+        (§8.2), except the layer moduli for the <i>existing</i> pavement and subgrade must first be estimated from
+        FWD deflection-bowl <b>back-calculation</b> (§12.4.4) — a trial-and-error numerical fitting process, typically
+        run in dedicated software, that iterates layer moduli until the predicted deflection bowl matches the
+        measured one. This tool has no such back-calculation engine, so §12.4.1–12.4.9 (homogeneous sub-sectioning
+        for back-calculation, seed-modulus selection, temperature/traffic-damage modulus reduction factors —
+        Equations 12.4–12.16 — and presumptive cracked-material properties, Table 12.7) are out of scope here.
+      </p>
+      <p style="font-size:.88rem;color:#6b4c0c;margin:0 0 8px;">
+        <b>How to bridge to Tab 4:</b> once existing layer/subgrade design moduli have been back-calculated and
+        adjusted (temperature, seasonal moisture, and future fatigue-damage reduction per §12.4.5–12.4.8) using
+        appropriate specialist software, they can be entered directly as the bottom layers of a Tab 4 layer stack,
+        with the proposed new overlay layer(s) added on top — Tab 4's solver already supports an arbitrary n-layer
+        stack and evaluates critical strains against the same Section 5/6 fatigue criteria this rehabilitation design
+        also uses. Two points from §12.4.1 to carry across: existing bound (asphalt/cemented) layers are normally
+        assumed to have negligible remaining fatigue life, so only the fatigue life of the <i>new</i> materials is
+        usually checked; and reflective cracking risk from cracked material below is a real concern — new-pavement
+        design uses 175 mm of sound asphalt cover over cemented/RCC/LMC material as its benchmark for that risk.
+      </p>
+      <p style="font-size:.88rem;color:#6b4c0c;margin:0;font-weight:700;">
+        Engage a qualified pavement engineer with FWD back-calculation software for any §12.4 strengthening design —
+        do not substitute the §12.3 granular-overlay calculator above for pavements containing asphalt or cemented
+        material.
+      </p>
+    </div>
+  </section>
+
+  <!-- ================= TAB 6: REPORT ================= -->
   <section id="tab-report" class="panel">
     <div class="card no-print">
       <h2>Generate Compliance Review Report</h2>
@@ -726,7 +877,7 @@ const DOWEL_TABLE = [
 /* ============================================================
    SHARED STATE
    ============================================================ */
-const STATE = { traffic: null, flexible: null, rigid: null, flexible84: null, mech: null };
+const STATE = { traffic: null, flexible: null, rigid: null, flexible84: null, mech: null, overlay: null };
 
 // Figure 8.4 layer material descriptions (§8.3.2)
 const FIG84_MATERIALS = {
@@ -1194,6 +1345,121 @@ function computeRigid(){
    ============================================================ */
 document.getElementById('repDate').value = new Date().toISOString().slice(0,10);
 
+/* ============================================================
+   TAB 5 — OVERLAY DESIGN (§12.3 Empirical Design of Granular Overlays)
+   D = 18.6056 * N^-0.2281                                  Equation 12.3
+   CD = mean + f*SD  (n>=10) ; CD = max (n<10)               Equation 12.2
+   D_Ref = D_x * (566/sigma_x)                               Equation 12.1
+   t = 25 * ln(CD_factored / D_design) / ln(0.94)            this tool's own
+       derivation from the stated "6% reduction per 25mm" field-data basis
+       (§12.3.3) — NOT a value transcribed directly from the Specification.
+   ============================================================ */
+const OV_F_TABLE = [ [10,1.38],[12,1.36],[14,1.35],[16,1.34],[19,1.33],[24,1.32],[30,1.31] ];
+function ovFValue(n){
+  if (n < 10) return null; // CD = max instead
+  if (n >= 30) return 1.31;
+  for (let i=0;i<OV_F_TABLE.length-1;i++){
+    const [n1,f1] = OV_F_TABLE[i], [n2,f2] = OV_F_TABLE[i+1];
+    if (n>=n1 && n<=n2) return f1 + (f2-f1)*(n-n1)/(n2-n1);
+  }
+  return 1.31;
+}
+
+function ovPullDesa(){
+  if (!STATE.traffic){ alert('Calculate design traffic in Tab 1 first.'); return; }
+  document.getElementById('ovDesa').value = Math.round(STATE.traffic.DESA);
+  alert('Pulled DESA = '+fmt(STATE.traffic.DESA,0)+' ESA from Tab 1.');
+}
+
+function ovToggleDevice(){
+  document.getElementById('ovFwdStressField').style.display =
+    document.getElementById('ovDevice').value==='fwd' ? 'block' : 'none';
+}
+
+function computeOverlay(){
+  const N0 = parseFloat(document.getElementById('ovDesa').value)||0;
+  const mult = parseFloat(document.getElementById('ovTrafficMult').value)||1;
+  const N = N0 * mult;
+  const device = document.getElementById('ovDevice').value;
+  const fwdStress = parseFloat(document.getElementById('ovFwdStress').value)||566;
+  const watertable = document.getElementById('ovWatertable').value==='yes';
+  const monthFactorRaw = parseFloat(document.getElementById('ovMonth').value);
+  const seasonalFactor = watertable ? 1.0 : monthFactorRaw;
+  const granularOnly = document.getElementById('ovGranularOnly').value==='yes';
+  const subLength = parseFloat(document.getElementById('ovSubLength').value)||0;
+
+  const raw = document.getElementById('ovDeflections').value
+    .split(/[,\s]+/).map(s=>parseFloat(s)).filter(v=>!isNaN(v) && v>0);
+  if (raw.length < 2){ alert('Enter at least 2 measured deflection values.'); return; }
+
+  const n = raw.length;
+  const mean = raw.reduce((a,b)=>a+b,0)/n;
+  const sd = Math.sqrt(raw.reduce((a,b)=>a+(b-mean)*(b-mean),0)/(n-1));
+  const cv = sd/mean;
+  const max = Math.max(...raw);
+  const f = ovFValue(n);
+  const CD_raw = (n<10) ? max : (mean + f*sd);
+
+  // Equation 12.1: contact-stress adjustment (FWD only, linear scalar — applied to CD, equivalent to
+  // applying it to each individual reading first, since the adjustment factor is constant)
+  const stressAdj = (device==='fwd' && fwdStress>0) ? (566/fwdStress) : 1.0;
+  // Table 12.3: FWD standardisation to Benkelman Beam-equivalent
+  const deviceFactor = (device==='fwd') ? 1.1 : 1.0;
+
+  const CD_factored = CD_raw * stressAdj * deviceFactor * seasonalFactor;
+
+  const D_design = 18.6056 * Math.pow(N, -0.2281);
+
+  const overlayNeeded = CD_factored > D_design;
+  let overlayThickness = 0, thicknessNote = '';
+  if (overlayNeeded){
+    const raw_t = 25 * Math.log(D_design / CD_factored) / Math.log(0.94);
+    overlayThickness = Math.ceil(raw_t/10)*10; // rounded up to a practical 10 mm construction increment
+    thicknessNote = 'Calculated '+fmt(raw_t,1)+' mm, rounded up to a practical 10 mm increment.';
+  }
+
+  STATE.overlay = { N0, mult, N, device, fwdStress, seasonalFactor, granularOnly, subLength,
+    n, mean, sd, cv, max, f, CD_raw, stressAdj, deviceFactor, CD_factored, D_design, overlayNeeded, overlayThickness };
+
+  document.getElementById('ovStatsCard').style.display = 'block';
+  document.getElementById('ovStatN').textContent = n;
+  document.getElementById('ovStatMean').textContent = fmt(mean,3)+' mm';
+  document.getElementById('ovStatSD').textContent = fmt(sd,3)+' mm';
+  document.getElementById('ovStatCV').textContent = fmt(cv,3);
+
+  const cvWarnEl = document.getElementById('ovCVWarn');
+  let cvWarnings = [];
+  if (subLength < 100) cvWarnings.push('Sub-section length ('+subLength+' m) is below the recommended 100 m minimum (§12.3.1) — results may not represent a genuinely homogeneous section.');
+  if (cv > 0.25) cvWarnings.push('Coefficient of variation ('+fmt(cv,3)+') exceeds 0.25 — this sub-section may not be homogeneous (§12.3.1) and may need further subdivision.');
+  if (!granularOnly) cvWarnings.push('Existing pavement is NOT granular-only — §12.3.3 states this empirical method does not apply where asphalt/cemented material is present. Use the §12.4 MEP guidance below (via Tab 4) instead.');
+  cvWarnEl.innerHTML = cvWarnings.map(w=>`<div class="warn-box">${w}</div>`).join('');
+
+  document.getElementById('ovCalcRows').innerHTML = `
+    <tr><td>Design traffic (base × conservatism multiplier)</td><td>${fmt(N0,0)} × ${fmt(mult,1)} = ${fmt(N,0)} ESA</td><td>§12.2</td></tr>
+    <tr><td>Raw characteristic deflection (CD)</td><td>${fmt(CD_raw,3)} mm ${n<10?'(= maximum, n&lt;10)':'(= mean + f×SD, f='+fmt(f,2)+')'}</td><td>Eq. 12.2, Table 12.4</td></tr>
+    <tr><td>Contact-stress adjustment factor</td><td>${fmt(stressAdj,3)} ${device==='fwd'?('(566/'+fwdStress+' kPa)'):'(Benkelman Beam — n/a)'}</td><td>Eq. 12.1</td></tr>
+    <tr><td>Device standardisation factor</td><td>${fmt(deviceFactor,2)} ${device==='fwd'?'(FWD → Benkelman Beam-equivalent)':'(Benkelman Beam — n/a)'}</td><td>Table 12.3</td></tr>
+    <tr><td>Seasonal moisture correction factor</td><td>${fmt(seasonalFactor,2)}</td><td>Table 12.2</td></tr>
+    <tr><td><b>Factored characteristic deflection</b></td><td><b>${fmt(CD_factored,3)} mm</b></td><td>§12.3.1</td></tr>
+    <tr><td><b>Design deflection, D</b></td><td><b>${fmt(D_design,3)} mm</b></td><td>Eq. 12.3, Fig. 12.2</td></tr>`;
+
+  document.getElementById('ovResultBox').innerHTML = overlayNeeded
+    ? `<div class="lbl">Granular overlay required</div>
+       <div class="big">${overlayThickness} mm</div>
+       <div class="note" style="margin-top:6px;">Factored CD (${fmt(CD_factored,3)} mm) exceeds the design deflection
+       (${fmt(D_design,3)} mm) for ${fmt(N,0)} ESA. ${thicknessNote}</div>
+       ${overlayThickness > 300 ? '<div class="warn-box">This calculated thickness is very large — Figure 12.3\'s field data '+
+         'does not necessarily extend this far, and a pavement this deficient may be more cost-effectively addressed by '+
+         'reconstruction rather than a granular overlay. Treat this figure with caution and get a pavement engineer\'s '+
+         'judgement.</div>' : ''}`
+    : `<div class="lbl">Result</div>
+       <div class="big" style="color:var(--ok);">No overlay required</div>
+       <div class="note" style="margin-top:6px;">Factored CD (${fmt(CD_factored,3)} mm) is ≤ the design deflection
+       (${fmt(D_design,3)} mm) for ${fmt(N,0)} ESA (§12.3.3, Table 12.5 Step 6).</div>`;
+
+  document.getElementById('ovResultCard').style.display = 'block';
+}
+
 function buildReport(){
   const project = document.getElementById('repProject').value || '(not specified)';
   const reviewer = document.getElementById('repReviewer').value || '(not specified)';
@@ -1232,6 +1498,19 @@ function buildReport(){
       findings.push({p:'⚠️ EXPERIMENTAL — '+r.layer+' ('+r.response+')', req:r.criterion+' — allow N='+fmt(r.Nallow,0)+' ESA',
         sub: fmt(STATE.mech.desa,0)+' ESA design vs '+r.strain.toFixed(1)+' µε', status: r.status});
     });
+  }
+  if (STATE.overlay){
+    const o = STATE.overlay;
+    findings.push({p:'Overlay design — factored characteristic deflection vs. design deflection', req:'CD ≤ '+fmt(o.D_design,3)+' mm (Eq. 12.3, Fig. 12.2) for '+fmt(o.N,0)+' ESA',
+      sub: fmt(o.CD_factored,3)+' mm', status: o.overlayNeeded ? 'CHECK' : 'PASS'});
+    if (o.overlayNeeded){
+      findings.push({p:'Overlay design — required granular overlay thickness', req:'§12.3.3, Fig. 12.3 (tool-derived formula — see Tab 5 note)',
+        sub: o.overlayThickness+' mm', status:'INFO'});
+    }
+    if (!o.granularOnly){
+      findings.push({p:'Overlay design — method applicability', req:'§12.3.3 requires a granular-only existing pavement',
+        sub:'Existing pavement contains asphalt/cemented material', status:'CHECK'});
+    }
   }
 
   findings.forEach(f=>{ if(f.status==='FAIL') anyFail=true; if(f.status==='CHECK'||f.status==='MISSING') anyCheck=true; });
@@ -1273,6 +1552,11 @@ function buildReport(){
         finalising any structure shown here.</li>
       <li>All figures are transcribed from D3 102-2024; verify against the source PDF for any submission to MPWT /
         GDPW.</li>
+      ${STATE.overlay ? '<li>Overlay design (Tab 5) covers §12.3, the empirical granular-overlay method for existing ' +
+        'granular pavements only. The overlay-thickness formula used there is this tool\'s own reconstruction of the ' +
+        'Figure 12.3 field-data basis, not a value transcribed directly from the Specification — verify against the ' +
+        'actual chart. For existing pavements with asphalt/cemented material, §12.4\'s mechanistic-empirical ' +
+        'strengthening procedure requires FWD deflection-bowl back-calculation software this tool does not provide.</li>' : ''}
       ${STATE.mech ? '<li><b>⚠️ Any row above from Tab 4 (Mechanistic-Empirical) is produced by an experimental, ' +
         'independently-derived layered-elastic solver that is not part of the official MPWT specification and has ' +
         'not been validated against AustPADS/CIRCLY or reviewed by MPWT. Do not rely on these rows for a submission ' +
@@ -1615,6 +1899,5 @@ function computeME(){
   }, 20);
 }
 </script>
-
-
-</body></html>
+</body>
+</html>
