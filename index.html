@@ -129,6 +129,11 @@
     files, pasted data, or a single hand-entered bowl, and ships with the full 1,919-point NR7 PK424+000–522+000 survey
     from the uploaded FWD report. Like Tab 4 it is <b>experimental and unvalidated against MPWT-recognised software</b>,
     and back-calculation is inherently non-unique — see the warnings on that tab.
+    <b>Austroads alignment.</b> Every criterion implemented here has been checked against Austroads AGPT02-26
+    <i>Guide to Pavement Technology Part 2</i>, Edition 5.2 (July 2026) — the parent document D3 102-2024 is adapted
+    from. The criteria are unchanged; the three places where the parent guide has since been extended are set out in a
+    reference table on Tab 4. <b>D3 102-2024 remains the binding standard</b> and is what every compliance verdict in
+    this tool is measured against.
   </div>
 
   <nav class="tabs">
@@ -523,7 +528,18 @@
           <input type="number" id="meDesa" value="1000000" min="0" step="10000">
         </div>
         <div class="field">
-          <label>Asphalt design reliability level <span class="hint">Table 6.9 — sets RF for Eq. 6.15</span></label>
+          <label>Cemented-material reliability <span class="hint">Austroads AGPT02-26 Table 6.9 — 95% reproduces D3 Eq. 6.8 exactly</span></label>
+          <select id="meCemReliability">
+            <option value="50">50% (RF = 25)</option>
+            <option value="80">80% (RF = 4.7)</option>
+            <option value="85">85% (RF = 3.3)</option>
+            <option value="90">90% (RF = 2.0)</option>
+            <option value="95" selected>95% (RF = 1.0) — as D3 102-2024</option>
+            <option value="97.5">97.5% (RF = 0.5)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Asphalt design reliability level <span class="hint">D3 Table 6.9 (= Austroads AGPT02-26 Table 6.17) — sets RF for Eq. 6.15</span></label>
           <select id="meReliability">
             <option value="50">50%</option>
             <option value="80">80%</option>
@@ -547,9 +563,45 @@
         <thead><tr><th>Layer</th><th>Critical response</th><th>Value</th><th>Criterion</th><th>Allowable ESA (N)</th><th>Design ESA</th><th>Status</th></tr></thead>
         <tbody id="meFindings"></tbody>
       </table>
-      <div class="note">Subgrade check per Equation 5.2 (N=(9150/µε)⁷). Cemented-material check per Equation 6.8, presumptive K
-        from Table 6.7 (N=(K/µε)¹²). Asphalt check per Equation 6.15, SF=6 (presumptive), RF from Table 6.9 by
-        reliability level.</div>
+      <div class="note">Subgrade check per Equation 5.2 (N=(9150/µε)⁷). Cemented-material check per Equation 6.8,
+        presumptive K from Table 6.7 (N=(K/µε)¹²), optionally scaled by the Austroads AGPT02-26 reliability factor —
+        at 95% the factor is 1.0 and the result is identical to D3. Asphalt check per Equation 6.15, SF=6
+        (presumptive), RF from Table 6.9 by reliability level. All three criteria were verified unchanged against
+        Austroads AGPT02-26 Edition 5.2 (July 2026).</div>
+    </div>
+
+    <div class="card" style="border:1px solid #c7dcf3;background:var(--blue-lt);">
+      <h2 style="color:var(--navy2);">Alignment with Austroads AGPT02-26 (Edition 5.2, July 2026)</h2>
+      <div class="clause">D3 102-2024 is adapted from the Austroads <i>Guide to Pavement Technology Part 2</i>. Cambodia's
+        binding standard is D3 102-2024 (Prakas No. 133, 20 August 2024) — the parent guide is shown here for reference
+        only and does not govern a compliance verdict.</div>
+      <p style="font-size:.88rem;margin:0 0 10px;">Every performance criterion this tool implements was checked
+        line-by-line against Edition 5.2. <b>The criteria themselves are unchanged</b>, so a D3 design remains
+        consistent with current Austroads practice:</p>
+      <div style="overflow-x:auto;"><table>
+        <thead><tr><th>Criterion / parameter</th><th>D3 102-2024</th><th>AGPT02-26 Ed 5.2</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Subgrade strain</td><td>Eq. 5.2 — N = (9150/µε)⁷</td><td>identical</td><td><span class="badge-status ok">same</span></td></tr>
+          <tr><td>Asphalt fatigue</td><td>Eq. 6.15 — (SF/RF) × 6918(0.856V<sub>b</sub>+1.08)/(E<sup>0.36</sup>µε), SF=6</td><td>Eq. 25 — identical</td><td><span class="badge-status ok">same</span></td></tr>
+          <tr><td>Asphalt reliability factors</td><td>Table 6.9 — 1.0 / 2.4 / 3.0 / 3.9 / 6.0 / 9.0</td><td>Table 6.17 — identical</td><td><span class="badge-status ok">same</span></td></tr>
+          <tr><td>Cemented fatigue constant K</td><td>Table 6.7 — 235 / 233 / 261</td><td>Table 6.10 — identical</td><td><span class="badge-status ok">same</span></td></tr>
+          <tr><td>Granular sublayer modulus ratio</td><td>E<sub>V,top</sub> = E<sub>V,under</sub> × 2<sup>(t/125)</sup></td><td>Eq. 42 — identical</td><td><span class="badge-status ok">same</span></td></tr>
+          <tr><td>Empirical granular chart</td><td>Fig. 8.4, 10⁵–10⁸ ESA; §8.2.7 note re 350 MPa</td><td>Fig. 8.4, same range; §8.2.8 (renumbered)</td><td><span class="badge-status ok">same</span></td></tr>
+          <tr><td>Lane distribution factors</td><td>Table 7.2 — 1.00 / N/A / 0.50 and 0.95 / 0.65 / 0.30</td><td>Table 7.3 — same values, columns mirrored for drive-on-left</td><td><span class="badge-status ok">same</span></td></tr>
+          <tr style="background:var(--warn-bg);"><td><b>Cemented fatigue equation</b></td><td>Eq. 6.8 — N = (K/µε)¹², no reliability factor</td><td><b>Eq. 10 — N = RF × (K/µε)¹²</b>, RF Table 6.9 = 25 / 4.7 / 3.3 / 2.0 / 1.0 / 0.5</td><td><span class="badge-status warn">extended</span></td></tr>
+          <tr style="background:var(--warn-bg);"><td>Top granular sublayer modulus</td><td>Table 6.3 — 5 columns (1,000–5,000 MPa), 9 rows (40–≥250 mm)</td><td>Table 6.4 — adds 400 and 600 MPa columns and 275 / ≥300 mm rows; shared cells identical</td><td><span class="badge-status warn">extended</span></td></tr>
+          <tr style="background:var(--warn-bg);"><td>Project reliability tiers</td><td>Table 12.1 — 3 classes (95 / 90 / 85%)</td><td>Table 2.1 — 5 classes with ranges: Freeway 95, Highway &gt;2000 95, Highway ≤2000 90, Main road &gt;500 85, Other ≤500 80</td><td><span class="badge-status warn">finer</span></td></tr>
+        </tbody>
+      </table></div>
+      <div class="note"><b>What the one substantive change means.</b> D3 Equation 6.8 has no reliability factor, which is
+        exactly the Austroads RF = 1.0 case — <b>95% project reliability</b>. The cemented check on this tab was therefore
+        always pinned at 95% without saying so. The selector above now makes that explicit: leave it at 95% for a D3
+        compliance check, or move it to see what another reliability level would allow. Austroads treats project
+        reliability as a single project-level choice (Table 2.1), so in a genuine Austroads design the asphalt and
+        cemented reliability selectors would be set to the same value.</div>
+      <div class="note">Tabs 5 and 6 (overlay design and FWD back-calculation) draw on Austroads <i>Part 5: Pavement
+        Evaluation and Treatment Design</i>, not Part 2, so AGPT02-26 does not cover them and nothing on those tabs was
+        affected by this check.</div>
     </div>
   </section>
 
@@ -2191,6 +2243,11 @@ const ME_TYPES = {
 };
 const ME_K = { cem_base:235, cem_subbase_crushed:233, cem_subbase_natural:261 };
 const ME_RF = { '50':1.0, '80':2.4, '85':3.0, '90':3.9, '95':6.0, '97.5':9.0 };
+// Austroads AGPT02-26 (Ed 5.2, July 2026) Table 6.9 — reliability factor for heavily bound
+// cemented material fatigue, Equation 10: N = RF x (K/microstrain)^12.
+// D3 102-2024 Equation 6.8 carries no RF, which is the RF = 1.0 case, i.e. 95% project
+// reliability. Selecting 95% here therefore reproduces the D3 result exactly.
+const ME_CEM_RF = { '50':25, '80':4.7, '85':3.3, '90':2.0, '95':1.0, '97.5':0.5 };
 
 function meRenderLayers(){
   const body = document.getElementById('meLayerRows');
@@ -2257,6 +2314,7 @@ function computeME(){
   const aMm = parseFloat(document.getElementById('meA').value);
   const desa = parseFloat(document.getElementById('meDesa').value);
   const RFsel = document.getElementById('meReliability').value;
+  const cemSel = document.getElementById('meCemReliability').value;
   const p = pKpa/1000; // MPa (N/mm^2), consistent with E in MPa and lengths in mm
   const a = aMm;
 
@@ -2288,8 +2346,11 @@ function computeME(){
           response = 'Horiz. tensile strain, bottom of asphalt';
         } else {
           const K = ME_K[L.type];
-          Nallow = Math.pow(K/strainMicro, 12);
-          criterion = 'Eq. 6.8, K='+K+' (Table 6.7)';
+          const cemRF = ME_CEM_RF[cemSel] !== undefined ? ME_CEM_RF[cemSel] : 1.0;
+          Nallow = cemRF * Math.pow(K/strainMicro, 12);
+          criterion = 'Eq. 6.8, K='+K+' (Table 6.7)' +
+            (cemRF===1.0 ? ' — RF=1.0 (95% reliability), as D3'
+                         : ' × RF='+cemRF+' (Austroads AGPT02-26 Table 6.9, '+cemSel+'% reliability — beyond D3)');
           response = 'Horiz. tensile strain, bottom of layer';
         }
         results.push({layer:'Layer '+(i+1)+' ('+ME_TYPES[L.type]+')', response, strain:strainMicro, criterion, Nallow, status: Nallow>=desa?'PASS':'FAIL'});
