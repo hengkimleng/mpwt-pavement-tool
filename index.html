@@ -1399,17 +1399,37 @@ function computeTraffic(){
 
   const tcat = TCAT.find(c => millionESA >= c.lo && millionESA < (c.key==='T5' ? c.hi+1e-9 : c.hi)) || (millionESA>=3 ? null : TCAT[0]);
 
-  STATE.traffic = { Ni, CGF, NHV, NDT, ESA_HVAG, DESA, millionESA, tcatKey: tcat?tcat.key:null, axle, P, R };
+  const roadClassEl = document.getElementById('roadClass');
+  const locEl = document.getElementById('location'), lanesEl = document.getElementById('lanes'),
+        lanePosEl = document.getElementById('lanePos');
+  const txt = el => el && el.selectedIndex>=0 ? el.options[el.selectedIndex].textContent.trim() : '';
+  STATE.traffic = { Ni, CGF, NHV, NDT, ESA_HVAG, DESA, millionESA, tcatKey: tcat?tcat.key:null, axle, P, R,
+    tcatText: tcat ? tcat.text : null, LDF, NHVAG, AADT, DF, HV, tldLabel: tld.label,
+    inputs: [
+      ['Road class', txt(roadClassEl), 'Table 7.1'],
+      ['Design period, P', P+' years', '§7.4.2'],
+      ['AADT — first year', fmt(AADT,0)+' veh/day', '§7.4.4'],
+      ['Direction factor, DF', fmt(DF,2), '§7.4.4'],
+      ['Heavy vehicles, %HV', fmt(HV,1)+'%', '§7.4.4'],
+      ['Location', txt(locEl), 'Table 7.5'],
+      ['Lanes each direction', txt(lanesEl), 'Table 7.2'],
+      ['Design lane', txt(lanePosEl), 'Table 7.2'],
+      ['Annual growth rate, R', fmt(R,2)+'%', '§7.4.5'],
+      ['Axle groups per heavy vehicle, N<sub>HVAG</sub>', fmt(NHVAG,2), 'Table 7.5'],
+      ['Traffic load distribution', tld.label, '§7.5, App. E'],
+      ['Predominant axle loads', axle==='over8'?'> 8 tonnes':'< 8 tonnes', '§11.8.3'],
+    ] };
 
   const rows = [
     ['Lane distribution factor', 'LDF', LDF_BASIS[lanes]||'Table 7.2', LDF.toFixed(2), '§7.4.3'],
-    ['Initial daily heavy vehicles', 'N&#8571;', 'AADT × DF × %HV/100 × LDF (Eq. 7.1)', fmt(Ni)+' veh/day', '§7.4.4'],
+    ['Initial daily heavy vehicles', 'N<sub>i</sub>', 'AADT × DF × %HV/100 × LDF (Eq. 7.1)', fmt(Ni)+' veh/day', '§7.4.4'],
     ['Cumulative growth factor', 'CGF', R>0 ? '((1+0.01R)^P − 1) / 0.01R (Eq. 7.2)' : 'P (R = 0) (Eq. 7.2)', fmt(CGF), '§7.4.5'],
-    ['Cumulative heavy vehicles', 'N&#8574;&#8574;', '365 × CGF × N&#8571; (Eq. 7.3)', fmt(NHV,0), '§7.4.5'],
-    ['Cumulative HVAG', 'N&#8574;&#8571;', 'N&#8574;&#8574; × N&#8574;&#8574;&#8570;&#8570; (Eq. 7.6)', fmt(NDT,0), '§7.4.7'],
+    ['Cumulative heavy vehicles', 'N<sub>HV</sub>', '365 × CGF × N<sub>i</sub> (Eq. 7.3)', fmt(NHV,0), '§7.4.5'],
+    ['Cumulative HVAG', 'N<sub>DT</sub>', 'N<sub>HV</sub> × N<sub>HVAG</sub> (Eq. 7.6)', fmt(NDT,0), '§7.4.7'],
     ['ESA per HVAG (TLD)', 'ESA/HVAG', tld.label, fmt(ESA_HVAG), '§7.5, App. E'],
-    ['Design Traffic (ESA)', 'DESA', 'ESA/HVAG × N&#8574;&#8571; (Eq. 7.8)', fmt(DESA,0)+' ESA', '§7.6.2'],
+    ['Design Traffic (ESA)', 'DESA', 'ESA/HVAG × N<sub>DT</sub> (Eq. 7.8)', fmt(DESA,0)+' ESA', '§7.6.2'],
   ];
+  STATE.traffic.steps = rows;
   document.getElementById('trafficSteps').innerHTML = rows.map(r=>
     `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td><b>${r[3]}</b></td><td>${r[4]}</td></tr>`).join('');
 
@@ -1451,7 +1471,8 @@ function computeFlexible(){
   const grp = subgradeGroup(sc.cls);
   const structure = CATALOGUE[axle][grp][tcatKey];
 
-  STATE.flexible = { cbr, sc: sc.cls, grp, tcatKey, axle, structure };
+  STATE.flexible = { cbr, sc: sc.cls, grp, tcatKey, axle, structure,
+    axleLabel: axle==='over8'?'> 8 tonnes':'< 8 tonnes' };
 
   document.getElementById('fxSubgradeInfo').innerHTML =
     `<div class="stat-grid">
@@ -2282,6 +2303,99 @@ function buildReport(){
       different scope above to report them.</div>`;
   }
 
+  /* ---------- design inputs, derivation and the resulting structure ----------
+     A compliance report has to be reproducible: a reviewer must be able to see every input
+     that was used, follow the arithmetic to the design traffic, and read the structure that
+     came out of it. These sections carry the same content the tabs display on screen. */
+  const T = STATE.traffic;
+  let detail = '';
+
+  if (T && T.inputs){
+    detail += `<h3>1. Design Inputs — Traffic (§7.4)</h3>
+      <table><thead><tr><th style="width:34%">Parameter</th><th>Value</th><th style="width:20%">Clause / source</th></tr></thead>
+      <tbody>${T.inputs.map(r=>`<tr><td>${r[0]}</td><td><b>${r[1]}</b></td><td>${r[2]}</td></tr>`).join('')}</tbody></table>`;
+  }
+
+  if (T && T.steps){
+    detail += `<h3>2. Design Traffic Derivation (§7.4–7.6)</h3>
+      <table><thead><tr><th>Step</th><th>Symbol</th><th>Equation</th><th>Value</th><th>Clause</th></tr></thead>
+      <tbody>${T.steps.map(r=>
+        `<tr><td>${r[0]}</td><td>${r[1]}</td><td style="font-size:.95em;">${r[2]}</td><td><b>${r[3]}</b></td><td>${r[4]}</td></tr>`).join('')}
+      </tbody></table>
+      <div class="stat-grid">
+        <div class="stat"><div class="lbl">Design traffic (DESA)</div><div class="val">${fmt(T.DESA,0)} ESA</div></div>
+        <div class="stat"><div class="lbl">Cumulative HVAG (N<sub>DT</sub>)</div><div class="val">${fmt(T.NDT,0)}</div></div>
+        <div class="stat"><div class="lbl">Traffic category</div><div class="val">${T.tcatKey||'> 3.0 M'}${T.tcatText?' ('+T.tcatText+' M ESA)':''}</div></div>
+        <div class="stat"><div class="lbl">Axle regime</div><div class="val">${T.axle==='over8'?'> 8 tonnes':'< 8 tonnes'}</div></div>
+      </div>`;
+  }
+
+  let sec = 3;
+  if (inScope('flex') && STATE.flexible && (govTcat===null || STATE.flexible.tcatKey===govTcat)){
+    const s = STATE.flexible;
+    const struct = s.structure.filter(l=>l.m!=='DBS1').reduce((a,l)=>a+l.t,0);
+    const roleOf = (m,i)=> m==='DBS1' ? 'Surfacing'
+                    : m==='GC' ? 'Capping'
+                    : (m==='G80'||m==='G60') ? 'Base' : 'Subbase';
+    detail += `<h3>${sec++}. Required Pavement Structure — Catalogue Method (§11.8.3, Figure 11.3)</h3>
+      <div class="stat-grid">
+        <div class="stat"><div class="lbl">Subgrade design CBR</div><div class="val">${fmt(s.cbr,1)}%</div></div>
+        <div class="stat"><div class="lbl">Subgrade class (Table 11.6)</div><div class="val">${s.sc}</div></div>
+        <div class="stat"><div class="lbl">Catalogue group</div><div class="val">${s.grp}</div></div>
+        <div class="stat"><div class="lbl">Traffic category</div><div class="val">${s.tcatKey}</div></div>
+      </div>
+      <table><thead><tr><th style="width:12%">Layer</th><th style="width:24%">Material</th><th style="width:12%">Min. thickness</th><th>Material specification (Table 11.3)</th></tr></thead>
+      <tbody>${s.structure.map((l,i)=>
+        `<tr><td>${roleOf(l.m,i)}</td><td>${l.m} — ${MATERIALS[l.m].name}</td><td><b>${l.t} mm</b></td>
+             <td style="font-size:.95em;">${MATERIALS[l.m].spec}</td></tr>`).join('')}
+        <tr><td>Subgrade</td><td>In-situ, CBR ${fmt(s.cbr,1)}% (class ${s.sc})</td><td>—</td>
+            <td style="font-size:.95em;">4-day soaked CBR per Section 5; confirm by laboratory testing before construction.</td></tr>
+      </tbody></table>
+      <div class="note"><b>Total structural (granular) thickness over subgrade: ${struct} mm.</b> This excludes the
+        20 mm non-structural sprayed-seal surfacing — §11.8.3 notes sprayed seals do not contribute to required cover
+        thickness. If a dense-graded asphalt or SMA surfacing &lt; 40 mm is used instead of a sprayed seal, its thickness
+        may count toward total cover, provided the base layer itself is still at least 100 mm.</div>`;
+    if (s.proposed){
+      const p = s.proposed.filter(l=>l.m!=='DBS1').reduce((a,l)=>a+l.t,0);
+      detail += `<div class="note">Proposed design submitted for comparison: ${p} mm structural thickness
+        (${p>=struct?'meets':'does not meet'} the ${struct} mm catalogue requirement).</div>`;
+    }
+  }
+
+  if (inScope('flex') && STATE.flexible84 && near(STATE.flexible84.desa, govESA)){
+    const f = STATE.flexible84;
+    detail += `<h3>${sec++}. Required Pavement Structure — General Empirical Method (§8.3.1, Figure 8.4)</h3>
+      <table><thead><tr><th style="width:22%">Layer</th><th style="width:16%">Design CBR</th><th style="width:16%">Thickness</th><th>Basis</th></tr></thead>
+      <tbody>
+        <tr><td>Surfacing</td><td>—</td><td><b>20 mm</b></td><td style="font-size:.95em;">DBS1 sprayed seal — non-structural, makes no contribution to cover (§11.8.3)</td></tr>
+        ${f.granular.map(l=>`<tr><td>${l.label}</td><td>${l.cbrNote}</td><td><b>${l.t} mm</b></td>
+            <td style="font-size:.95em;">${FIG84_MATERIALS[l.key].spec}</td></tr>`).join('')}
+        ${f.improveLayer?`<tr><td>Improvement layer</td><td>Design CBR ${fmt(f.improveLayer.designCBR,1)}%</td>
+            <td><b>${f.improveLayer.thickness} mm</b></td>
+            <td style="font-size:.95em;">${FIG84_MATERIALS.IMPROVE84.spec} Support via Eq. 8.16: CBR × 2^(t/150).</td></tr>`:''}
+        <tr><td>Subgrade</td><td>${fmt(f.cbrNat,1)}%</td><td>—</td><td style="font-size:.95em;">In-situ, 4-day soaked CBR per Section 5</td></tr>
+      </tbody></table>
+      <div class="note">Total cover required over the natural subgrade at ${fmt(f.desa,0)} ESA:
+        <b>${fmt(f.totalOverNatural,0)} mm</b>; provided by the build-up above: <b>${fmt(f.totalProvided,0)} mm</b>.
+        Minimum base thickness once resting on CBR ≥ 30% material: ${fmt(f.minBase,0)} mm.</div>`;
+  }
+
+  if (inScope('rigid') && STATE.rigid && near(STATE.rigid.hvag, govHVAG)){
+    const r = STATE.rigid;
+    detail += `<h3>${sec++}. Rigid Pavement Design Summary (§9.2–9.4.4)</h3>
+      <table><thead><tr><th style="width:34%">Parameter</th><th>Proposed</th><th>Minimum requirement</th><th style="width:18%">Clause</th></tr></thead>
+      <tbody>
+        <tr><td>Base type</td><td colspan="2"><b>${BASE_TYPE_LABEL[r.type]}</b></td><td>§9.2.1</td></tr>
+        <tr><td>Design traffic (cumulative HVAG)</td><td colspan="2"><b>${fmt(r.hvag,0)}</b> — ${r.tierLabel}</td><td>§7.4.7</td></tr>
+        <tr><td>Base thickness</td><td><b>${r.base} mm</b></td><td>≥ ${r.reqBase} mm</td><td>Table 9.7</td></tr>
+        <tr><td>Subbase</td><td><b>${r.subbaseThk} mm ${r.subbaseType}</b></td><td>${r.reqSubbase.text}</td><td>Table 9.1</td></tr>
+        <tr><td>Concrete flexural strength</td><td><b>${r.flex} MPa</b></td><td>≥ ${r.reqFlex} MPa</td><td>§9.3.3</td></tr>
+        ${r.dowelled?`<tr><td>Dowel bar diameter</td><td><b>${r.dowelDia} mm</b></td><td>per Table 9.8 for the base thickness</td><td>Table 9.8</td></tr>`:''}
+      </tbody></table>`;
+  }
+
+  const findingsHeading = detail ? `<h3>${sec}. Compliance Findings</h3>` : '<h3>Findings</h3>';
+
   const printedOn = new Date().toLocaleString();
   document.getElementById('reportCard').innerHTML = `
     <div class="print-only" style="text-align:center;border-bottom:1.5pt solid #0b2545;padding-bottom:6px;margin-bottom:12px;">
@@ -2299,13 +2413,13 @@ function buildReport(){
       <div class="report-meta"><b>Design scope:</b> ${SCOPE_LABEL[scope]}</div>
       <span class="verdict-pill" style="background:var(--${vClass}-bg);color:var(--${vClass});">${verdict}</span>
     </div>
-    ${basis}${gates}
-    <h3>Findings</h3>
+    ${basis}${gates}${detail}
+    ${findingsHeading}
     <table>
       <thead><tr><th>#</th><th>Parameter</th><th>MPWT Requirement (Clause)</th><th>Submitted / Proposed</th><th>Status</th></tr></thead>
       <tbody>${rowsHtml}</tbody>
     </table>
-    <h3>Observations &amp; Recommendations</h3>
+    <h3>${detail? (sec+1)+'. ' : ''}Observations &amp; Recommendations</h3>
     <ul style="font-size:.88rem;">
       <li>This report covers <b>${SCOPE_LABEL[scope].toLowerCase()}</b> only, and every check in it was run at the
         ${STATE.traffic?fmt(STATE.traffic.DESA,0)+' ESA':'(none)'} design traffic calculated in Tab 1. Checks belonging to
