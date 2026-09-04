@@ -84,11 +84,33 @@
   .report-meta{font-size:.85rem;color:var(--muted);}
   .verdict-pill{display:inline-block;padding:6px 16px;border-radius:20px;font-weight:800;font-size:.95rem;margin:8px 0 14px;}
   footer.appfoot{max-width:1180px;margin:0 auto;padding:0 28px 40px;color:var(--muted);font-size:.78rem;}
+  .print-only{display:none;}
+  @page{ size:A4 portrait; margin:16mm 14mm 20mm 14mm; }
   @media print{
-    nav.tabs, .no-print{display:none!important;}
-    .panel{display:block!important;}
-    body{background:#fff;}
-    .card{box-shadow:none;border:1px solid #999;}
+    /* Print the compliance report and nothing else. Every other tab is working area:
+       input forms, reference tables and survey data have no place in a signed document. */
+    header, nav.tabs, .source-note, footer.appfoot, .no-print{display:none!important;}
+    .panel{display:none!important;}
+    #tab-report{display:block!important;}
+    #tab-report > .card.no-print{display:none!important;}
+    .print-only{display:block;}
+    body{background:#fff;color:#000;font-size:10.5pt;}
+    .container{max-width:none;margin:0;padding:0;}
+    #reportCard{border:none;box-shadow:none;padding:0;margin:0;}
+    /* status colours must survive the print pipeline or the verdict is unreadable */
+    *{-webkit-print-color-adjust:exact !important; print-color-adjust:exact !important;}
+    table{font-size:9.5pt;width:100%;}
+    thead{display:table-header-group;}          /* repeat the header on every page */
+    tr, .result-box, .warn-box, .err-box{page-break-inside:avoid; break-inside:avoid;}
+    h2,h3{page-break-after:avoid; break-after:avoid;}
+    th{background:#eef2f7 !important;}
+    a{text-decoration:none;color:#000;}
+    .print-foot{position:fixed;bottom:-14mm;left:0;right:0;font-size:8pt;color:#555;
+      border-top:.5pt solid #bbb;padding-top:3px;display:flex;justify-content:space-between;}
+    .signoff{margin-top:26px;page-break-inside:avoid;}
+    .signoff td{border:none;padding:26px 10px 4px;vertical-align:bottom;}
+    .signoff .sigline{border-bottom:.7pt solid #333;height:0;}
+    .signoff .siglabel{font-size:8.5pt;color:#333;padding-top:4px;}
   }
 </style>
 </head>
@@ -1081,18 +1103,39 @@
   <section id="tab-report" class="panel">
     <div class="card no-print">
       <h2>Generate Compliance Review Report</h2>
-      <div class="clause">Compiles the results from Tabs 1–4 into the MPWT compliance review format.</div>
+      <div class="clause">Compiles the results of the tabs that are within the scope of the design being reported, checked
+        against the design traffic calculated in Tab 1.</div>
       <div class="grid">
         <div class="field"><label>Project / document name</label><input type="text" id="repProject" placeholder="e.g. Provincial Road P6R12, PK2+160–PK5+330"></div>
         <div class="field"><label>Reviewer</label><input type="text" id="repReviewer" placeholder="Name / title"></div>
         <div class="field"><label>Review date</label><input type="text" id="repDate"></div>
+        <div class="field">
+          <label>Design scope <span class="hint">only the checks belonging to this scope are reported</span></label>
+          <select id="repScope">
+            <option value="flex" selected>New flexible pavement</option>
+            <option value="rigid">New rigid (concrete) pavement</option>
+            <option value="rehab">Rehabilitation — overlay / strengthening</option>
+            <option value="all">Everything computed (exploratory)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Design traffic basis <span class="hint">Tab 1 is the governing figure for the whole report</span></label>
+          <select id="repEsaMode">
+            <option value="strict" selected>Only report checks run at the Tab 1 design traffic</option>
+            <option value="flag">Report all in-scope checks, flagging any run at a different traffic</option>
+          </select>
+        </div>
       </div>
       <div class="row-actions">
         <button class="btn" onclick="buildReport()">Build report</button>
-        <button class="btn secondary" onclick="window.print()">Print / save as PDF</button>
+        <button class="btn secondary" onclick="printReport()">Print / save as PDF</button>
       </div>
     </div>
     <div class="card" id="reportCard" style="display:none;"></div>
+    <div class="print-only print-foot">
+      <span>MPWT Pavement Design &amp; Compliance Tool — D3 102-2024</span>
+      <span id="printFootProject"></span>
+    </div>
   </section>
 </div>
 
@@ -1897,81 +1940,222 @@ function computeNR7Overlay(){
     above is a placeholder unless you replaced it with NR7's actual design ESA — the whole table moves with it.</div>`;
 }
 
+// Printing emits the compliance report only. Refuse to print an empty or stale one —
+// a blank or out-of-date PDF sent to a consultant is worse than no PDF.
+function printReport(){
+  const card = document.getElementById('reportCard');
+  if (!card || card.style.display === 'none' || !card.innerHTML.trim()){
+    alert('Build the report first — the printed document contains only the compliance report, and there is nothing to print yet.');
+    return;
+  }
+  buildReport();               // re-run so the PDF matches the inputs as they stand now
+  setTimeout(()=>window.print(), 60);
+}
+
 function buildReport(){
   const project = document.getElementById('repProject').value || '(not specified)';
   const reviewer = document.getElementById('repReviewer').value || '(not specified)';
   const date = document.getElementById('repDate').value;
+  const scope = document.getElementById('repScope').value;
+  const esaMode = document.getElementById('repEsaMode').value;
 
-  let findings = [];
-  let anyFail = false, anyCheck = false;
+  // The design traffic calculated in Tab 1 governs the whole report. Any tab run against a
+  // different traffic figure is not evidence about THIS design, so it is either excluded or
+  // flagged — never allowed to contribute a silent PASS.
+  const govESA  = STATE.traffic ? STATE.traffic.DESA : null;
+  const govHVAG = STATE.traffic ? STATE.traffic.NDT  : null;
+  const govTcat = STATE.traffic ? STATE.traffic.tcatKey : null;
+  const near = (a,b)=> a!=null && b!=null && b>0 && Math.abs(a-b)/b <= 0.005;
+
+  // scope -> which groups of checks belong in the report
+  const SCOPES = {
+    flex:  ['traffic','flex'],
+    rigid: ['traffic','rigid'],
+    rehab: ['traffic','rehab'],
+    all:   ['traffic','flex','rigid','rehab'],
+  };
+  const inScope = g => SCOPES[scope].indexOf(g) >= 0;
+
+  let all = [];
+  const add = (grp, o) => { o.grp = grp; all.push(o); };
 
   if (STATE.traffic){
-    findings.push({p:'Design Traffic (DESA)', req:'Calculated per §7', sub:fmt(STATE.traffic.DESA,0)+' ESA', status:'INFO'});
+    const t = STATE.traffic;
+    add('traffic', {p:'Design Traffic (DESA)', req:'§7.6.2, Eq. 7.8 — over a '+t.P+'-year design period at '+t.R+'% growth',
+      sub:fmt(t.DESA,0)+' ESA'+(t.tcatKey?' (traffic category '+t.tcatKey+')':''), status:'INFO'});
   }
+
   if (STATE.flexible){
-    const reqStructural = STATE.flexible.structure.filter(l=>l.m!=='DBS1').reduce((s,l)=>s+l.t,0);
-    findings.push({p:'Flexible pavement — subgrade class', req:'Table 11.6', sub:STATE.flexible.sc, status:'INFO'});
-    findings.push({p:'Flexible pavement — required structural thickness', req:'≥ '+reqStructural+' mm (Fig. 11.3, §11.8.3)',
-      sub: STATE.flexible.proposed ? STATE.flexible.proposed.filter(l=>l.m!=='DBS1').reduce((s,l)=>s+l.t,0)+' mm (proposed)' : '(no proposed design entered)',
-      status: STATE.flexible.proposed ? ((STATE.flexible.proposed.filter(l=>l.m!=='DBS1').reduce((s,l)=>s+l.t,0)>=reqStructural)?'PASS':'FAIL') : 'MISSING'});
+    const s = STATE.flexible;
+    const reqStructural = s.structure.filter(l=>l.m!=='DBS1').reduce((a,l)=>a+l.t,0);
+    const prop = s.proposed ? s.proposed.filter(l=>l.m!=='DBS1').reduce((a,l)=>a+l.t,0) : null;
+    // the catalogue is driven by traffic CATEGORY, so consistency is checked on the category
+    const tcatOk = govTcat===null || s.tcatKey===govTcat;
+    add('flex', {p:'Flexible pavement (catalogue) — subgrade class', req:'Table 11.6', sub:s.sc, status:'INFO',
+      tcatUsed:s.tcatKey, tcatOk});
+    add('flex', {p:'Flexible pavement (catalogue) — required structural thickness',
+      req:'≥ '+reqStructural+' mm (Fig. 11.3, §11.8.3), traffic category '+(s.tcatKey||'—'),
+      sub: prop!==null ? prop+' mm (proposed)' : '(no proposed design entered)',
+      status: prop!==null ? (prop>=reqStructural?'PASS':'FAIL') : 'MISSING',
+      tcatUsed:s.tcatKey, tcatOk});
   }
+
   if (STATE.flexible84){
     const f = STATE.flexible84;
-    findings.push({p:'Flexible pavement (general method) — design traffic', req:'10⁵–10⁸ ESA range (§8.3.1, Fig. 8.4)', sub:fmt(f.desa,0)+' ESA', status:'INFO'});
-    findings.push({p:'Flexible pavement (general method) — required structural thickness', req:'≥ '+fmt(f.totalProvided,0)+' mm (Fig. 8.4, §8.3.1–8.3.2)',
-      sub: f.proposed ? f.proposed.filter(l=>l.label!=='Surfacing').reduce((s,l)=>s+(l.t||0),0)+' mm (proposed)' : '(no proposed design entered)',
-      status: f.proposed ? ((f.proposed.filter(l=>l.label!=='Surfacing').reduce((s,l)=>s+(l.t||0),0)>=f.totalProvided)?'PASS':'FAIL') : 'MISSING'});
+    const prop = f.proposed ? f.proposed.filter(l=>l.label!=='Surfacing').reduce((a,l)=>a+(l.t||0),0) : null;
+    add('flex', {p:'Flexible pavement (Fig. 8.4 general method) — required structural thickness',
+      req:'≥ '+fmt(f.totalProvided,0)+' mm (Fig. 8.4, §8.3.1–8.3.2) at '+fmt(f.desa,0)+' ESA',
+      sub: prop!==null ? prop+' mm (proposed)' : '(no proposed design entered)',
+      status: prop!==null ? (prop>=f.totalProvided?'PASS':'FAIL') : 'MISSING', esaUsed:f.desa});
   }
+
   if (STATE.rigid){
-    findings.push({p:'Rigid pavement — base thickness ('+BASE_TYPE_LABEL[STATE.rigid.type]+')', req:'≥ '+STATE.rigid.reqBase+' mm (Table 9.7, '+STATE.rigid.tierLabel+')',
-      sub: STATE.rigid.base+' mm', status: STATE.rigid.base>=STATE.rigid.reqBase?'PASS':'FAIL'});
-    findings.push({p:'Rigid pavement — subbase', req:STATE.rigid.reqSubbase.text+' (Table 9.1)', sub:STATE.rigid.subbaseThk+' mm '+STATE.rigid.subbaseType,
-      status: STATE.rigid.subbaseThk>=parseInt(STATE.rigid.reqSubbase.text)?'PASS':'FAIL'});
-    findings.push({p:'Rigid pavement — flexural strength', req:'≥ '+STATE.rigid.reqFlex+' MPa (§9.3.3)', sub:STATE.rigid.flex+' MPa',
-      status: STATE.rigid.flex>=STATE.rigid.reqFlex?'PASS':'FAIL'});
+    const r = STATE.rigid;
+    add('rigid', {p:'Rigid pavement — base thickness ('+BASE_TYPE_LABEL[r.type]+')',
+      req:'≥ '+r.reqBase+' mm (Table 9.7, '+r.tierLabel+')', sub:r.base+' mm',
+      status: r.base>=r.reqBase?'PASS':'FAIL', hvagUsed:r.hvag});
+    add('rigid', {p:'Rigid pavement — subbase', req:r.reqSubbase.text+' (Table 9.1)',
+      sub:r.subbaseThk+' mm '+r.subbaseType,
+      status: r.subbaseThk>=parseInt(r.reqSubbase.text)?'PASS':'FAIL', hvagUsed:r.hvag});
+    add('rigid', {p:'Rigid pavement — flexural strength', req:'≥ '+r.reqFlex+' MPa (§9.3.3)',
+      sub:r.flex+' MPa', status: r.flex>=r.reqFlex?'PASS':'FAIL', hvagUsed:r.hvag});
   }
+
   if (STATE.mech){
+    // the M-E check belongs to whichever scope is being reported: new flexible design, or
+    // §12.4 strengthening of an existing pavement
+    const grp = (scope==='rehab') ? 'rehab' : 'flex';
     STATE.mech.results.forEach(r=>{
-      findings.push({p:'⚠️ EXPERIMENTAL — '+r.layer+' ('+r.response+')', req:r.criterion+' — allow N='+fmt(r.Nallow,0)+' ESA',
-        sub: fmt(STATE.mech.desa,0)+' ESA design vs '+r.strain.toFixed(1)+' µε', status: r.status});
+      add(grp, {p:'⚠️ EXPERIMENTAL — '+r.layer+' ('+r.response+')',
+        req:r.criterion+' — allowable N = '+fmt(r.Nallow,0)+' ESA',
+        sub: r.strain.toFixed(1)+' µε at '+fmt(STATE.mech.desa,0)+' ESA design traffic',
+        status:r.status, esaUsed:STATE.mech.desa});
     });
   }
+
   if (STATE.backcalc){
     const b = STATE.backcalc;
-    const q = b.rmsPct<2?'PASS':(b.rmsPct<5?'CHECK':'FAIL');
-    findings.push({p:'⚠️ EXPERIMENTAL — FWD back-calculation, section '+b.section+' ('+b.layers.length+' layers + half-space)',
+    add('rehab', {p:'⚠️ EXPERIMENTAL — FWD back-calculation, section '+b.section+' ('+b.layers.length+' layers + half-space)',
       req:'§12.4.4 — computed bowl matched to measured bowl (RMS < 2% good, < 5% usable)',
       sub:'RMS '+fmt(b.rmsPct,2)+'% · '+b.layers.map(L=>L.name+' '+fmt(L.E,0)+' MPa').join(', ')+', '+b.bottom.name+' '+fmt(b.bottom.E,0)+' MPa',
-      status:q});
-    findings.push({p:'FWD back-calculation — design-moduli adjustment', req:'§12.4.5–12.4.8 (temperature, seasonal moisture, fatigue-damage MRF Eq. 12.13, Table 12.6 caps)',
+      status: b.rmsPct<2?'PASS':(b.rmsPct<5?'CHECK':'FAIL')});
+    add('rehab', {p:'FWD back-calculation — design-moduli adjustment',
+      req:'§12.4.5–12.4.8 (temperature, seasonal moisture, fatigue-damage MRF Eq. 12.13, Table 12.6 caps)',
       sub:'not applied by this tool — raw back-calculated values only', status:'CHECK'});
   }
+
   if (STATE.overlay){
     const o = STATE.overlay;
-    findings.push({p:'Overlay design — factored characteristic deflection vs. design deflection', req:'CD ≤ '+fmt(o.D_design,3)+' mm (Eq. 12.3, Fig. 12.2) for '+fmt(o.N,0)+' ESA',
-      sub: fmt(o.CD_factored,3)+' mm', status: o.overlayNeeded ? 'CHECK' : 'PASS'});
+    add('rehab', {p:'Overlay design — factored characteristic deflection vs. design deflection',
+      req:'CD ≤ '+fmt(o.D_design,3)+' mm (Eq. 12.3, Fig. 12.2) at '+fmt(o.N,0)+' ESA',
+      sub: fmt(o.CD_factored,3)+' mm', status: o.overlayNeeded ? 'CHECK' : 'PASS', esaUsed:o.N0});
     if (o.overlayNeeded){
-      findings.push({p:'Overlay design — required granular overlay thickness', req:'§12.3.3, Fig. 12.3 (tool-derived formula — see Tab 5 note)',
-        sub: o.overlayThickness+' mm', status:'INFO'});
+      add('rehab', {p:'Overlay design — required granular overlay thickness',
+        req:'§12.3.3, Fig. 12.3 (tool-derived formula — see Tab 5 note)',
+        sub: o.overlayThickness+' mm', status:'INFO', esaUsed:o.N0});
     }
     if (!o.granularOnly){
-      findings.push({p:'Overlay design — method applicability', req:'§12.3.3 requires a granular-only existing pavement',
-        sub:'Existing pavement contains asphalt/cemented material', status:'CHECK'});
+      add('rehab', {p:'Overlay design — method applicability',
+        req:'§12.3.3 requires a granular-only existing pavement',
+        sub:'Existing pavement contains asphalt/cemented material', status:'CHECK', esaUsed:o.N0});
     }
   }
 
+  // --- apply scope, then the traffic-consistency gate ---
+  const outOfScope = all.filter(f=>!inScope(f.grp)).length;
+  let scoped = all.filter(f=>inScope(f.grp));
+
+  const stale = [];
+  scoped.forEach(f=>{
+    let bad = false, note = null;
+    if (f.esaUsed !== undefined && f.esaUsed !== null && govESA !== null && !near(f.esaUsed, govESA)){
+      bad = true; note = 'run at '+fmt(f.esaUsed,0)+' ESA, not the '+fmt(govESA,0)+' ESA design traffic';
+    } else if (f.hvagUsed !== undefined && f.hvagUsed !== null && govHVAG !== null && !near(f.hvagUsed, govHVAG)){
+      bad = true; note = 'run at '+fmt(f.hvagUsed,0)+' HVAG, not the '+fmt(govHVAG,0)+' HVAG from Tab 1';
+    } else if (f.tcatOk === false){
+      bad = true; note = 'looked up under traffic category '+(f.tcatUsed||'—')+', not the '+govTcat+' category from Tab 1';
+    }
+    f.stale = bad; f.staleNote = note;
+    if (bad) stale.push(f);
+  });
+
+  let excluded = 0;
+  if (esaMode === 'strict' && govESA !== null){
+    excluded = scoped.filter(f=>f.stale).length;
+    scoped = scoped.filter(f=>!f.stale);
+  } else {
+    // a check run at the wrong traffic can never stand as a PASS for this design
+    scoped.forEach(f=>{ if (f.stale && f.status==='PASS') f.status='CHECK'; });
+  }
+
+  const findings = scoped;
+  let anyFail = false, anyCheck = false;
   findings.forEach(f=>{ if(f.status==='FAIL') anyFail=true; if(f.status==='CHECK'||f.status==='MISSING') anyCheck=true; });
 
+  // A verdict needs something actually checked. Design traffic alone is context, not a check —
+  // a report carrying only INFO rows must never read "Compliant".
+  const substantive = findings.filter(f=>f.status!=='INFO').length;
   let verdict = 'Compliant', vClass='ok';
-  if (anyFail){ verdict='Non-Compliant'; vClass='bad'; }
+  if (!substantive || !STATE.traffic){ verdict='No In-Scope Results'; vClass='warn'; }
+  else if (anyFail){ verdict='Non-Compliant'; vClass='bad'; }
   else if (anyCheck){ verdict='Partially Compliant / Data Missing'; vClass='warn'; }
 
   const rowsHtml = findings.map((f,i)=>{
     const icon = f.status==='PASS'?'✅':f.status==='FAIL'?'❌':f.status==='INFO'?'ℹ️':'⚠️';
-    return `<tr><td>${i+1}</td><td>${f.p}</td><td>${f.req}</td><td>${f.sub}</td><td>${icon} ${f.status}</td></tr>`;
-  }).join('') || '<tr><td colspan="5">No calculations have been run yet — complete Tabs 1–6 first.</td></tr>';
+    return `<tr${f.stale?' style="background:var(--warn-bg);"':''}><td>${i+1}</td><td>${f.p}</td><td>${f.req}</td>
+      <td>${f.sub}${f.stale?`<br><span class="hint" style="color:var(--warn);font-weight:600;">⚠ ${f.staleNote}</span>`:''}</td>
+      <td>${icon} ${f.status}</td></tr>`;
+  }).join('') || `<tr><td colspan="5">No in-scope results. ${
+      STATE.traffic ? 'Run the checks that belong to the selected design scope, using the Tab 1 design traffic.'
+                    : 'Start by calculating the design traffic in Tab 1 — it governs the whole report.'}</td></tr>`;
 
+  const SCOPE_LABEL = { flex:'New flexible pavement', rigid:'New rigid (concrete) pavement',
+                        rehab:'Rehabilitation — overlay / strengthening', all:'Everything computed (exploratory)' };
+
+  // basis + exclusions banner
+  let basis = '';
+  if (!STATE.traffic){
+    basis = `<div class="err-box"><b>No design traffic.</b> Tab 1 has not been run, so there is no governing ESA and
+      nothing in this report can be tied to a design traffic level. Calculate the design traffic first.</div>`;
+  } else {
+    const t = STATE.traffic;
+    basis = `<div class="result-box" style="margin-bottom:14px;">
+      <div class="lbl">Governing design traffic — all checks below are measured against this</div>
+      <div class="big">${fmt(t.DESA,0)} ESA</div>
+      <div class="note" style="margin-top:4px;">Tab 1, §7.6.2 Eq. 7.8 — ${t.P}-year design period, ${t.R}% annual growth,
+        ${fmt(t.NDT,0)} cumulative HVAG${t.tcatKey?', traffic category '+t.tcatKey:''}. Design scope reported:
+        <b>${SCOPE_LABEL[scope]}</b>.</div></div>`;
+  }
+  let gates = '';
+  if (excluded>0){
+    gates += `<div class="warn-box"><b>${excluded} in-scope result${excluded===1?'':'s'} excluded</b> because ${excluded===1?'it was':'they were'}
+      computed at a different design traffic than Tab 1. ${excluded===1?'That check does':'Those checks do'} not describe this design —
+      re-run ${excluded===1?'it':'them'} after pulling the design traffic from Tab 1, or switch the traffic basis above to list
+      ${excluded===1?'it':'them'} with a flag.</div>`;
+  }
+  if (esaMode!=='strict' && stale.length>0){
+    gates += `<div class="warn-box"><b>${stale.length} result${stale.length===1?'':'s'} shown but flagged</b> — computed at a traffic
+      level other than the Tab 1 design traffic. Any that would otherwise have read PASS have been downgraded to CHECK, because a
+      check run at the wrong traffic cannot demonstrate compliance for this design.</div>`;
+  }
+  if (!substantive){
+    gates += `<div class="warn-box"><b>Nothing was actually checked for this scope.</b> The report carries the design
+      traffic for context but no ${SCOPE_LABEL[scope].toLowerCase()} check has been run at that traffic, so there is no
+      basis for a compliance verdict. Run the relevant tab, pulling the design traffic from Tab 1 first.</div>`;
+  }
+  if (outOfScope>0 && scope!=='all'){
+    gates += `<div class="note"><b>${outOfScope} result${outOfScope===1?'':'s'} outside the selected scope ${outOfScope===1?'was':'were'} omitted.</b>
+      The report covers ${SCOPE_LABEL[scope].toLowerCase()} only; other tabs were run but do not belong to this design. Choose a
+      different scope above to report them.</div>`;
+  }
+
+  const printedOn = new Date().toLocaleString();
   document.getElementById('reportCard').innerHTML = `
+    <div class="print-only" style="text-align:center;border-bottom:1.5pt solid #0b2545;padding-bottom:6px;margin-bottom:12px;">
+      <div style="font-size:12pt;font-weight:700;color:#0b2545;">ក្រសួងសាធារណការ និងដឹកជញ្ជូន</div>
+      <div style="font-size:10pt;font-weight:600;">Ministry of Public Works and Transport — General Directorate of Public Works</div>
+      <div style="font-size:8.5pt;color:#444;margin-top:2px;">Road Design Specification, Part 2 – Pavement (D3 102-2024) · approved under Prakas No. 133 សក.ប្រក, 20 August 2024</div>
+    </div>
     <div class="report-header">
       <h2>MPWT Compliance Review Report</h2>
       <div class="report-meta">
@@ -1979,8 +2163,10 @@ function buildReport(){
         <div><b>Standard(s) Applied:</b> D3 102-2024, Road Design Specification Part 2 – Pavement (First Edition 2024)</div>
         <div><b>Reviewer:</b> ${reviewer} &nbsp;·&nbsp; <b>Review Date:</b> ${date}</div>
       </div>
+      <div class="report-meta"><b>Design scope:</b> ${SCOPE_LABEL[scope]}</div>
       <span class="verdict-pill" style="background:var(--${vClass}-bg);color:var(--${vClass});">${verdict}</span>
     </div>
+    ${basis}${gates}
     <h3>Findings</h3>
     <table>
       <thead><tr><th>#</th><th>Parameter</th><th>MPWT Requirement (Clause)</th><th>Submitted / Proposed</th><th>Status</th></tr></thead>
@@ -1988,32 +2174,52 @@ function buildReport(){
     </table>
     <h3>Observations &amp; Recommendations</h3>
     <ul style="font-size:.88rem;">
-      <li>This tool covers Section 7 design-traffic calculation, the Section 11.8.3 lightly-trafficked catalogue
-        (≤ 3×10⁶ ESA), the Section 8.3.1 empirical design chart / Figure 8.4 general method (10⁵–10⁸ ESA — the
-        practical equivalent of the mechanistic-empirical procedure per §8.2.7), and Section 9 minimum-requirement
-        checks for rigid pavements. For traffic beyond 10⁸ ESA, for fatigue-life assessment of asphalt/cemented/lean-mix
-        bases (§8.2.1–8.2.7 layered-elastic analysis), or full base-thickness design of heavily-trafficked rigid
-        pavements (fatigue/erosion nomograph analysis per §9.4), engage a pavement engineer using specialist
-        layered-elastic design software.</li>
+      <li>This report covers <b>${SCOPE_LABEL[scope].toLowerCase()}</b> only, and every check in it was run at the
+        ${STATE.traffic?fmt(STATE.traffic.DESA,0)+' ESA':'(none)'} design traffic calculated in Tab 1. Checks belonging to
+        other scopes, or run at a different traffic level, are not included in the verdict above.</li>
+      ${scope==='flex' ? '<li>The Section 11.8.3 catalogue is valid to 3×10⁶ ESA and the Figure 8.4 general method to ' +
+        '10⁸ ESA. Beyond 10⁸ ESA, or for fatigue-life assessment of asphalt/cemented/lean-mix bases (§8.2 layered-elastic ' +
+        'analysis), engage a pavement engineer using MPWT-recognised design software.</li>' : ''}
+      ${scope==='rigid' ? '<li>Only the Section 9.2–9.4.4 <i>minimum requirement</i> tables are checked. The full ' +
+        'base-thickness design for heavily-trafficked rigid pavements (fatigue/erosion nomograph analysis, §9.4) is not ' +
+        'performed here and requires specialist software.</li>' : ''}
+      ${scope==='rehab' ? '<li>Rehabilitation checks rest on the condition survey and on layer thicknesses established ' +
+        'by coring, test pits or GPR (D1-101 / CTM Part H). Where thicknesses were assumed rather than measured, treat ' +
+        'the back-calculated moduli and any resulting treatment thickness as indicative only.</li>' : ''}
       <li>Confirm subgrade CBR by 4-day soaked laboratory testing or approved field method per Section 5 before
         finalising any structure shown here.</li>
       <li>All figures are transcribed from D3 102-2024; verify against the source PDF for any submission to MPWT /
         GDPW.</li>
-      ${STATE.backcalc ? '<li><b>⚠️ Any FWD back-calculation row above (Tab 6) comes from an experimental, independently-built ' +
+      ${findings.some(f=>f.grp==='rehab') && STATE.backcalc ? '<li><b>⚠️ Any FWD back-calculation row above (Tab 6) comes from an experimental, independently-built ' +
         'deflection-bowl inversion that is not part of the official MPWT specification and has not been validated against ' +
         'AustPADS, CIRCLY, EVERCALC or MODULUS. Back-calculation is non-unique and depends entirely on the assumed layer ' +
         'thicknesses, which for this dataset were an assumption rather than a measurement. The values are also raw ' +
         'back-calculated moduli, not design moduli — the §12.4.5-12.4.8 adjustments have not been applied.</b></li>' : ''}
-      ${STATE.overlay ? '<li>Overlay design (Tab 5) covers §12.3, the empirical granular-overlay method for existing ' +
+      ${findings.some(f=>f.grp==='rehab') && STATE.overlay ? '<li>Overlay design (Tab 5) covers §12.3, the empirical granular-overlay method for existing ' +
         'granular pavements only. The overlay-thickness formula used there is this tool\'s own reconstruction of the ' +
         'Figure 12.3 field-data basis, not a value transcribed directly from the Specification — verify against the ' +
         'actual chart. For existing pavements with asphalt/cemented material, §12.4\'s mechanistic-empirical ' +
         'strengthening procedure requires FWD deflection-bowl back-calculation software this tool does not provide.</li>' : ''}
-      ${STATE.mech ? '<li><b>⚠️ Any row above from Tab 4 (Mechanistic-Empirical) is produced by an experimental, ' +
+      ${findings.some(f=>f.p.indexOf('EXPERIMENTAL')===0 && f.esaUsed!==undefined) ? '<li><b>⚠️ Any row above from Tab 4 (Mechanistic-Empirical) is produced by an experimental, ' +
         'independently-derived layered-elastic solver that is not part of the official MPWT specification and has ' +
         'not been validated against AustPADS/CIRCLY or reviewed by MPWT. Do not rely on these rows for a submission ' +
         'without independent verification by a qualified pavement engineer.</b></li>' : ''}
-    </ul>`;
+    </ul>
+    <table class="signoff print-only">
+      <tr><td style="width:45%"><div class="sigline"></div><div class="siglabel">Reviewed by — ${reviewer}</div></td>
+          <td style="width:10%"></td>
+          <td style="width:45%"><div class="sigline"></div><div class="siglabel">Approved by</div></td></tr>
+      <tr><td><div class="sigline"></div><div class="siglabel">Date</div></td><td></td>
+          <td><div class="sigline"></div><div class="siglabel">Date</div></td></tr>
+    </table>
+    <div class="print-only" style="font-size:8pt;color:#555;margin-top:14px;border-top:.5pt solid #ccc;padding-top:5px;">
+      Generated ${printedOn} · Design scope: ${SCOPE_LABEL[scope]} · Governing design traffic:
+      ${STATE.traffic?fmt(STATE.traffic.DESA,0)+' ESA (Tab 1, §7.6.2)':'not calculated'} ·
+      This is an unofficial design aid, not published or endorsed by MPWT. Verify all figures against the current
+      official copy of D3 102-2024 before submission.
+    </div>`;
+  const pf = document.getElementById('printFootProject');
+  if (pf) pf.textContent = project + ' — ' + date;
   document.getElementById('reportCard').style.display = 'block';
 }
 
