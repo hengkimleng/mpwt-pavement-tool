@@ -1128,8 +1128,15 @@
       </div>
       <div class="row-actions">
         <button class="btn" onclick="buildReport()">Build report</button>
-        <button class="btn secondary" onclick="printReport()">Print / save as PDF</button>
+        <button class="btn secondary" onclick="copyReportForDocs()">Copy for Google Docs</button>
+        <button class="btn secondary" onclick="downloadReportDoc()">Download .doc for Drive</button>
       </div>
+      <div id="repExportMsg" class="note"></div>
+      <div class="note"><b>Getting this into Google Docs.</b> <i>Copy for Google Docs</i> puts the formatted report on your
+        clipboard — open a blank document at <b>docs.new</b> and paste. Tables, headings and the pass/fail colouring come
+        across intact, and you can edit and share from there. <i>Download .doc for Drive</i> saves a Word-compatible file
+        instead: upload it to Google Drive, then right-click → <i>Open with</i> → <i>Google Docs</i>. Both run entirely in
+        your browser — nothing is uploaded anywhere by this tool, and no sign-in is required.</div>
     </div>
     <div class="card" id="reportCard" style="display:none;"></div>
     <div class="print-only print-foot">
@@ -1942,14 +1949,140 @@ function computeNR7Overlay(){
 
 // Printing emits the compliance report only. Refuse to print an empty or stale one —
 // a blank or out-of-date PDF sent to a consultant is worse than no PDF.
-function printReport(){
-  const card = document.getElementById('reportCard');
-  if (!card || card.style.display === 'none' || !card.innerHTML.trim()){
-    alert('Build the report first — the printed document contains only the compliance report, and there is nothing to print yet.');
-    return;
-  }
-  buildReport();               // re-run so the PDF matches the inputs as they stand now
-  setTimeout(()=>window.print(), 60);
+/* ---------------- export the report to Google Docs ----------------
+   The tool is a static page with no backend, so it cannot write to Drive directly.
+   Two routes that work entirely client-side and need no sign-in:
+     - clipboard: rich HTML on the clipboard, pasted into a blank Google Doc
+     - file: a Word-compatible .doc that Drive converts on "Open with Google Docs"
+   Google Docs discards stylesheet rules on paste and keeps only inline styles, so the
+   export is a clone of the report with every class-based style written onto the element. */
+const DOC_CSS = {
+  table:  'width:100%;border-collapse:collapse;font-size:9.5pt;margin:8px 0 14px;',
+  th:     'background:#f4f7fb;color:#13315c;font-weight:700;font-size:8.5pt;text-transform:uppercase;' +
+          'letter-spacing:.02em;text-align:left;padding:6px 8px;border:.5pt solid #b9c7d8;',
+  td:     'padding:6px 8px;border:.5pt solid #dbe3ec;vertical-align:top;',
+  badge:  {ok:'color:#1e8a5f;font-weight:700;', bad:'color:#c23b3b;font-weight:700;',
+           warn:'color:#a9660a;font-weight:700;', '':'font-weight:700;'},
+  warnBox:'background:#fdf1de;border:.75pt solid #edd0a0;color:#6b4c0c;padding:7px 10px;margin:8px 0;font-size:9.5pt;',
+  errBox: 'background:#fbeaea;border:.75pt solid #eab8b8;color:#7a2323;padding:7px 10px;margin:8px 0;font-size:9.5pt;',
+  note:   'font-size:9pt;color:#5b6b80;margin:6px 0;',
+};
+
+function reportExportHtml(){
+  const src = document.getElementById('reportCard');
+  if (!src || src.style.display === 'none' || !src.innerHTML.trim()) return null;
+  const root = src.cloneNode(true);
+
+  // the letterhead, sign-off block and footer are screen-hidden but belong in the document
+  root.querySelectorAll('.print-only').forEach(el=>{ el.classList.remove('print-only'); el.style.display='block'; });
+
+  root.querySelectorAll('table').forEach(t=>{
+    const signoff = t.classList.contains('signoff');
+    t.setAttribute('style', DOC_CSS.table + (signoff?'margin-top:26px;':''));
+    t.querySelectorAll('th').forEach(el=>el.setAttribute('style', DOC_CSS.th));
+    t.querySelectorAll('td').forEach(el=>{
+      const w = el.getAttribute('style')||'';
+      const keepWidth = /width:\s*\d+%/.test(w) ? w.match(/width:\s*\d+%/)[0]+';' : '';
+      el.setAttribute('style', signoff ? keepWidth+'border:none;padding:26px 8px 4px;vertical-align:bottom;'
+                                       : keepWidth+DOC_CSS.td);
+    });
+  });
+  root.querySelectorAll('.sigline').forEach(el=>el.setAttribute('style','border-bottom:.7pt solid #333;height:0;'));
+  root.querySelectorAll('.siglabel').forEach(el=>el.setAttribute('style','font-size:8.5pt;color:#333;padding-top:4px;'));
+  root.querySelectorAll('.badge-status').forEach(el=>{
+    const k = el.classList.contains('ok')?'ok':el.classList.contains('bad')?'bad':el.classList.contains('warn')?'warn':'';
+    el.setAttribute('style', DOC_CSS.badge[k]);
+  });
+  root.querySelectorAll('.verdict-pill').forEach(el=>
+    el.setAttribute('style','font-weight:800;font-size:12pt;display:block;margin:8px 0 12px;'));
+  root.querySelectorAll('.warn-box').forEach(el=>el.setAttribute('style', DOC_CSS.warnBox));
+  root.querySelectorAll('.err-box').forEach(el=>el.setAttribute('style', DOC_CSS.errBox));
+  root.querySelectorAll('.note, .clause').forEach(el=>el.setAttribute('style', DOC_CSS.note));
+  root.querySelectorAll('.report-header').forEach(el=>
+    el.setAttribute('style','border-bottom:1.5pt solid #0b2545;padding-bottom:10px;margin-bottom:12px;'));
+  root.querySelectorAll('.report-meta').forEach(el=>el.setAttribute('style','font-size:9.5pt;color:#333;'));
+  // the governing-traffic callout is the anchor of the whole report — keep it visually distinct
+  root.querySelectorAll('.result-box').forEach(el=>
+    el.setAttribute('style','background:#eaf2fb;border:.75pt solid #c7dcf3;padding:10px 12px;margin:10px 0 14px;'));
+  root.querySelectorAll('.result-box .big, .big').forEach(el=>
+    el.setAttribute('style','font-size:16pt;font-weight:800;color:#0b2545;'));
+  root.querySelectorAll('.result-box .lbl, .lbl').forEach(el=>
+    el.setAttribute('style','font-size:8pt;color:#5b6b80;text-transform:uppercase;letter-spacing:.03em;'));
+  // grid layouts do not survive the paste, so stat tiles become a simple stacked list
+  root.querySelectorAll('.stat-grid').forEach(el=>el.setAttribute('style','margin:8px 0;'));
+  root.querySelectorAll('.stat').forEach(el=>
+    el.setAttribute('style','border:.5pt solid #dbe3ec;padding:6px 8px;margin-bottom:4px;'));
+  root.querySelectorAll('h2').forEach(el=>el.setAttribute('style','font-size:15pt;color:#0b2545;margin:0 0 6px;'));
+  root.querySelectorAll('h3').forEach(el=>el.setAttribute('style','font-size:11.5pt;color:#13315c;margin:16px 0 4px;'));
+  root.querySelectorAll('ul').forEach(el=>el.setAttribute('style','font-size:9.5pt;margin:4px 0 4px 18px;'));
+  root.querySelectorAll('li').forEach(el=>el.setAttribute('style','margin-bottom:5px;'));
+
+  return '<!DOCTYPE html><html><head><meta charset="utf-8">' +
+         '<title>MPWT Compliance Review Report</title></head>' +
+         '<body style="font-family:Calibri,Arial,sans-serif;font-size:10pt;color:#1a2433;">' +
+         root.innerHTML + '</body></html>';
+}
+
+function reportFileName(ext){
+  const p = (document.getElementById('repProject').value||'MPWT compliance report')
+              .replace(/[\\/:*?"<>|]+/g,'-').replace(/\s+/g,' ').trim().slice(0,80);
+  const d = (document.getElementById('repDate').value||'').replace(/[^0-9A-Za-z-]+/g,'-');
+  return p + (d?' '+d:'') + '.' + ext;
+}
+function repMsg(html, bad){
+  const el = document.getElementById('repExportMsg');
+  el.innerHTML = '<span style="color:var(--'+(bad?'bad':'ok')+');font-weight:600;">'+html+'</span>';
+}
+
+function copyReportForDocs(){
+  buildReport();                       // make sure the export matches the inputs as they stand
+  setTimeout(async ()=>{
+    const html = reportExportHtml();
+    if (!html){ alert('Build the report first — there is nothing to copy yet.'); return; }
+    const text = document.getElementById('reportCard').innerText;
+    try {
+      if (navigator.clipboard && window.ClipboardItem){
+        await navigator.clipboard.write([new ClipboardItem({
+          'text/html':  new Blob([html], {type:'text/html'}),
+          'text/plain': new Blob([text], {type:'text/plain'}),
+        })]);
+      } else { throw new Error('Clipboard API unavailable'); }
+      repMsg('Report copied. Open a blank document at <b>docs.new</b> and paste (Ctrl+V / ⌘V).');
+    } catch(err){
+      // file:// and some locked-down browsers block the async clipboard — fall back to a
+      // selected off-screen node, which execCommand can still copy as rich text
+      try {
+        const holder = document.createElement('div');
+        holder.setAttribute('style','position:fixed;left:-99999px;top:0;white-space:normal;');
+        holder.innerHTML = html;
+        document.body.appendChild(holder);
+        const r = document.createRange(); r.selectNodeContents(holder);
+        const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+        const ok = document.execCommand('copy');
+        sel.removeAllRanges(); document.body.removeChild(holder);
+        if (!ok) throw new Error('copy rejected');
+        repMsg('Report copied. Open a blank document at <b>docs.new</b> and paste (Ctrl+V / ⌘V).');
+      } catch(e2){
+        repMsg('Your browser blocked clipboard access — use <b>Download .doc for Drive</b> instead.', true);
+      }
+    }
+  }, 60);
+}
+
+function downloadReportDoc(){
+  buildReport();
+  setTimeout(()=>{
+    const html = reportExportHtml();
+    if (!html){ alert('Build the report first — there is nothing to export yet.'); return; }
+    const blob = new Blob(['\ufeff', html], {type:'application/msword'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = reportFileName('doc');
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url), 4000);
+    repMsg('Saved <b>'+reportFileName('doc')+'</b>. Upload it to Google Drive, then right-click it and choose ' +
+           '<b>Open with → Google Docs</b>.');
+  }, 60);
 }
 
 function buildReport(){
